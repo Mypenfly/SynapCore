@@ -1,0 +1,9 @@
+[package]
+name = "synapcore_tui"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+
+tokio = { version = "1.35", features = ["full"] }
+ratatui = { version = "0.30.0", features = ["serde"] }

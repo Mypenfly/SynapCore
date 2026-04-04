@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = [
+ #主要构成 bin
+ "tui",
+ "src-flutter",
+  #库文件 lib
+  "core",
+  "tools"
+]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.dependencies]
