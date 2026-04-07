@@ -16,7 +16,7 @@ pub type WebSearchResult<T> = Result<T, WebSearchErr>;
 ///参数设置
 #[derive(Serialize, Deserialize, Debug, Default)]
 struct Args {
-    query: String,
+    query: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,8 +51,8 @@ impl Tool for WebSearch {
             "type":"object",
             "properties":{
                 "query":{
-                    "type":"string",
-                    "description":"你搜索的问题"
+                    "type":"array",
+                    "description":"你要搜索的问题，将会调用一次搜索的api"
                 },
                 "summary":{
                     "type":"bool",

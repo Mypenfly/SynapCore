@@ -1,12 +1,12 @@
 use std::path::Path;
 
 use chrono::Utc;
-use rusqlite::{params};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
-use r2d2_sqlite::SqliteConnectionManager;
-use r2d2::Pool;
 
 use crate::{
     memory::emdedding::{EmbeddingClient, EmbeddingErr},
@@ -38,7 +38,7 @@ pub struct Memory {
 
 #[derive(Debug, Clone)]
 pub struct MemoryStore {
-    pool:Pool<SqliteConnectionManager> ,
+    pool: Pool<SqliteConnectionManager>,
     pub embedding_client: EmbeddingClient,
 }
 
@@ -66,7 +66,7 @@ impl MemoryStore {
 
     fn init_tables(&self) -> Result<()> {
         let conn = self.pool.get().map_err(MemoryErr::Init)?;
-        
+
         conn.execute(
             "CREATE TABLE IF NOT EXISTS memories(
                 id    TEXT PRIMARY KEY,
@@ -104,7 +104,6 @@ impl MemoryStore {
         let id = Uuid::new_v4().to_string();
         let score = 0.5;
 
-        
         let conn = self.pool.get().map_err(MemoryErr::Init)?;
         //填表
         conn.execute(
@@ -313,8 +312,7 @@ impl MemoryStore {
     ///删除低分记忆
     fn purge(&self, thresdhold: f32) -> Result<()> {
         let conn = self.pool.get().map_err(MemoryErr::Init)?;
-        let ids: Vec<String> = 
-            conn
+        let ids: Vec<String> = conn
             .prepare("SELECT id FROM memories WHERE score < ?")?
             .query_map(params![thresdhold], |row| row.get(0))?
             .map(|r| r.unwrap_or("00000".to_string()))
@@ -328,10 +326,8 @@ impl MemoryStore {
 
     fn delete(&self, id: &str) -> Result<()> {
         let conn = self.pool.get().map_err(MemoryErr::Init)?;
-        conn
-            .execute("DELETE FROM memories WHERE id = ?1", params![id])?;
-        conn
-            .execute("DELETE FROM vec_memories WHERE id = ?1", params![id])?;
+        conn.execute("DELETE FROM memories WHERE id = ?1", params![id])?;
+        conn.execute("DELETE FROM vec_memories WHERE id = ?1", params![id])?;
         Ok(())
     }
 }
@@ -358,3 +354,32 @@ pub struct MemoryConfig {
     ///检索结果量
     pub top_k: usize,
 }
+
+
+// mod test{
+//     use std::path::Path;
+
+//     use crate::{memory::mem::{MemoryConfig, MemoryStore}, read_config::{JsonConfig, LLMConfig}};
+
+//     #[tokio::test]
+//     async fn test() {
+//         let json = JsonConfig::from_file(&Path::new("/home/mypenfly/.config/synapcore/api.json")).unwrap();
+//         let config =json.get_config("siliconflow", "qwen_embed").unwrap() ;
+        
+//         let store = MemoryStore::open("/home/mypenfly/.config/synapcore/memory/Yore.db", config).unwrap();
+
+//         let query = store.embedding_client.embed("UserFeedBack").await.unwrap();
+//         let mem_config = MemoryConfig{
+//             min_score:0.1,
+//             boost:0.01,
+//             penalty:0.01,
+//             threshold:1.0,
+//             high_limit:0,
+//             top_k:10
+//         };
+//         let result = store.search(&query, &mem_config).unwrap();
+
+//         println!("{:#?}",result);
+        
+//     }
+// }
