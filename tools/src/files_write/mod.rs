@@ -79,8 +79,8 @@ impl Tool for FileWriter {
 
 impl FileWriter {
     pub(crate) fn new(sand_path: &Path) -> Self {
-        let path = shellexpand::tilde(sand_path.to_str().unwrap_or("./"));
-        let sand_box = PathBuf::from(path.as_ref());
+        // let path = shellexpand::tilde(sand_path.to_str().unwrap_or("./"));
+        let sand_box = std::fs::canonicalize(sand_path).unwrap_or_default();
 
         Self { sand_box }
     }

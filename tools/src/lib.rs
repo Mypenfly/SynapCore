@@ -17,6 +17,7 @@ use crate::{
 pub mod define_call;
 pub mod error;
 mod files_extract;
+mod files_system;
 mod files_write;
 pub mod tool_response;
 mod web_search;
@@ -105,6 +106,12 @@ impl Tools {
                 let search = web_search::WebSearch { params };
                 search.execute(&tool.function).await
             }
+            "files_system" => {
+                use files_system::FileSystem;
+                let sys = FileSystem::new(&self.sandbox_path);
+                // FileSystem::execute(FileSystem {  }, &tool.function).await
+                sys.execute(&tool.function).await
+            }
             _ => return Err(ToolErr::Unkown),
         };
         Ok(response)
@@ -119,7 +126,10 @@ impl Tools {
         self.sandbox_dyn = tools.sandbox_dyn;
         self.inner = tools.inner;
 
-        
+        //处理一下动态的沙盒路径
+        if self.sandbox_dyn {
+            self.sandbox_path = std::env::current_dir().unwrap_or_default();
+        }
         // println!("Self:{:#?}",self);
 
         let inner: &Vec<Inner> = self.inner.as_ref();
@@ -190,9 +200,12 @@ impl Tools {
 }
 
 mod test {
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
-    use crate::{Tools, define_call::tool_call::{self, Function}};
+    use crate::{
+        Tools,
+        define_call::tool_call::{self, Function},
+    };
 
     #[tokio::test]
     async fn test() {
@@ -202,19 +215,24 @@ mod test {
         let _ = tools.init(&path);
         // println!("{:#?}",&tools);
 
-        let args = "{\"query\":\"fulutter rust FFI flutter_rust_bridge 最佳实践\"}".to_string();
-        let function = Function{
-            name:Some("web_search".to_string()),
-            arguments:Some(args)
-            
+        // let args = "{\"query\":\"fulutter rust FFI flutter_rust_bridge 最佳实践\"}".to_string();
+        // let args ="{\"command\:\"ls\",\"path\":\"~/projects/rs-musicdog\",\"depth\":\"4\"}".to_string() ;
+        let args ="{\"command\":\"cp\",\"path\":\"~/projects/rs-musicdog/flake.lock\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test.lock\"}".to_string() ;
+        let function = Function {
+            name: Some("files_system".to_string()),
+            arguments: Some(args),
         };
-        let call = tool_call::ToolCall{
-            index:0,
-            id:Some("test".to_string()),
-            tool_type:Some("function".to_string()),
-            function
+        let call = tool_call::ToolCall {
+            index: 0,
+            id: Some("test".to_string()),
+            tool_type: Some("function".to_string()),
+            function,
         };
-        let response =tools.call(call).await.unwrap();
-        println!("{:#?}",response);
+        let response = tools.call(call).await.unwrap();
+        let s = match response {
+            crate::tool_response::ToolResponse::FileSystem(s) => s,
+            _ => "".to_string(),
+        };
+        println!("{}", s);
     }
 }

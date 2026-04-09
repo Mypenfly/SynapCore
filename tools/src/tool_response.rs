@@ -5,5 +5,6 @@ pub enum ToolResponse {
     Extract(String),
     Write(String),
     WebSearch(Vec<SearchValue>),
+    FileSystem(String),
     Error(String)
 }
