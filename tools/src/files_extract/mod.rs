@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fmt::Display, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +7,7 @@ use crate::{define_call::{tool_call::Function, tool_define::{FunctionDefinition,
 pub mod extract_error;
 
 
-#[derive(Debug,Serialize,Deserialize)]
+#[derive(Debug,Serialize,Deserialize,Default)]
 struct Args{
     path:Vec<String>,
 }
@@ -55,11 +55,16 @@ impl Tool for ExtractTool {
     //     })
     // }
     async fn execute(self,function:&Function)-> ToolResponse {
-        let response =match call_extract(function) {
-            Ok(s) => s,
-            Err(e) => format!("Function files_extract failed:{}",e)
-        };
-        ToolResponse::Extract(response)
+    let arguments =match &function.arguments{
+        Some(s) => s,
+        None => return ToolResponse::Error("Function files_extract lacks arguments".to_string())
+    };
+    let args:Args =serde_json::from_str(arguments).unwrap_or_default();
+
+    match extract(&args.path){
+        Ok(list) => ToolResponse::Extract (list),
+        Err(e)=>ToolResponse::Error(e.to_string())
+    }
     }
 }
 
@@ -79,22 +84,10 @@ const BINARY_EXT:&[&str] = &[
 
 
 
-///解析tooll_call请求
-fn call_extract(function:&Function)->ExtractResult<String> {
-    let arguments =match &function.arguments{
-        Some(s) => s,
-        None => return Ok("lack arguments".to_string())
-    };
-    let args:Args =serde_json::from_str(arguments)
-        .map_err(ExtractErr::JsonError)? ;
-    
-    
-    extract(&args.path)
-}
 
 ///解析文件的入口
-pub fn extract(files:&Vec<String>) ->ExtractResult<String> {
-    let mut text = String::new();
+pub fn extract(files:&Vec<String>) ->ExtractResult<Vec<ExtractRes>> {
+    let mut list = Vec::new();
     
     for file in files {
         let cow_path = shellexpand::tilde(file);
@@ -106,8 +99,6 @@ pub fn extract(files:&Vec<String>) ->ExtractResult<String> {
             return Err(ExtractErr::Check(format!("不支持该类型:{}",ext)));
         }
 
-        text.push_str(&format!("file path:{}\n",
-            path.to_str().unwrap_or("unkown")));
 
         if BINARY_EXT.contains(&ext.to_lowercase().as_str()) {
             let result = match ext.to_lowercase().as_str() {
@@ -116,15 +107,15 @@ pub fn extract(files:&Vec<String>) ->ExtractResult<String> {
                 "xml" => extract_xml(&path),
                 _ => Err(ExtractErr::Check(format!("不支持该类型:{}",ext))),
             };
-            text.push_str(&format!("content:\n{}\n\n",result?));
+            list.push(ExtractRes { path, content: result? });
         }else {
             let result = extract_text(&path);
-            text.push_str(&format!("content:\n{}\n\n",result?));
+            list.push(ExtractRes { path, content: result? });
         }
                 
     }
     
-    Ok(text)
+    Ok(list)
 }
 
 ///pdf解析
@@ -206,3 +197,14 @@ fn extract_text(path:&PathBuf) ->ExtractResult<String> {
     Ok(String::from_utf8_lossy(&bytes).to_string())
 }
 
+#[derive(Debug)]
+pub(crate) struct ExtractRes{
+    path:PathBuf,
+    content:String
+}
+
+impl Display for ExtractRes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{} :\n{}\n",self.path.display(),self.content)
+    }
+}

@@ -58,7 +58,7 @@ impl Tool for FileWriter {
     async fn execute(self, function: &crate::define_call::tool_call::Function) -> ToolResponse {
         let arguments = match &function.arguments {
             Some(s) => s,
-            None => return ToolResponse::Write("lack arguments".to_string()),
+            None => return ToolResponse::Error("lack arguments".to_string()),
         };
 
         let args: Args = serde_json::from_str(arguments).unwrap_or_default();
@@ -66,21 +66,22 @@ impl Tool for FileWriter {
         let path_cow = shellexpand::tilde(&args.path);
         let path = PathBuf::from(path_cow.as_ref());
         if self.write(&path, &args.content).await.is_none() {
-            return ToolResponse::Write(format!(
+            return ToolResponse::Error(format!(
                 "Function files_write failed in path :{}\n\n",
                 &args.path
             ));
         }
 
         let response = format!("Function files_write success:\n{}\n\n", &args.content);
-        ToolResponse::Write(response)
+        ToolResponse::Write { path: args.path.clone(), content: response }
     }
 }
 
 impl FileWriter {
     pub(crate) fn new(sand_path: &Path) -> Self {
-        // let path = shellexpand::tilde(sand_path.to_str().unwrap_or("./"));
-        let sand_box = std::fs::canonicalize(sand_path).unwrap_or_default();
+        let path_cow = shellexpand::tilde(sand_path.to_str().unwrap_or("./"));
+        let path = PathBuf::from(path_cow.as_ref());
+        let sand_box = std::fs::canonicalize(path).unwrap_or_default();
 
         Self { sand_box }
     }
@@ -101,6 +102,19 @@ impl FileWriter {
     }
 
     fn is_within(&self, path: &Path) -> bool {
+        let path_str = match path.to_str() {
+            Some(s)=>s,
+            None=>return false
+        };
+        let path_cow = shellexpand::tilde(path_str);
+
+        let path = PathBuf::from(path_cow.as_ref());
+        if !path.exists() {
+            let parent = path.parent().unwrap();
+            let _ = std::fs::create_dir_all(parent);
+            let _ = std::fs::File::create_new(&path);
+        }
+        
         let canonical = match fs::canonicalize(path) {
             Ok(p) => p,
             Err(_) => return false,

@@ -19,6 +19,7 @@ pub mod error;
 mod files_extract;
 mod files_system;
 mod files_write;
+mod fetch_url;
 pub mod tool_response;
 mod web_search;
 
@@ -112,6 +113,11 @@ impl Tools {
                 // FileSystem::execute(FileSystem {  }, &tool.function).await
                 sys.execute(&tool.function).await
             }
+            "fetch_url" => {
+                use fetch_url::FetchUrl;
+                let fetch = FetchUrl{};
+                fetch.execute(&tool.function).await
+            }
             _ => return Err(ToolErr::Unkown),
         };
         Ok(response)
@@ -195,6 +201,16 @@ impl Tools {
             let search_de = web_search.definition();
             enabled_list.push(search_de);
         }
+        if list.contains(&"fetch_url") {
+            let fetch_url =fetch_url::FetchUrl{} ;
+            let desription = fetch_url.definition();
+            enabled_list.push(desription);
+        }
+        if list.contains(&"files_system") {
+            let files_system = files_system::FileSystem::new(&self.sandbox_path);
+            let description = files_system.definition();
+            enabled_list.push(description);
+        }
         enabled_list
     }
 }
@@ -217,9 +233,10 @@ mod test {
 
         // let args = "{\"query\":\"fulutter rust FFI flutter_rust_bridge 最佳实践\"}".to_string();
         // let args ="{\"command\:\"ls\",\"path\":\"~/projects/rs-musicdog\",\"depth\":\"4\"}".to_string() ;
-        let args ="{\"command\":\"cp\",\"path\":\"~/projects/rs-musicdog/flake.lock\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test.lock\"}".to_string() ;
+        // let args ="{\"command\":\"cp\",\"path\":\"~/projects/rs-musicdog/flake.lock\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
+        let args = "{\"url\":\"https://github.com/Shrans/GalSites\"}".to_string();
         let function = Function {
-            name: Some("files_system".to_string()),
+            name: Some("fetch_url".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {
@@ -229,10 +246,6 @@ mod test {
             function,
         };
         let response = tools.call(call).await.unwrap();
-        let s = match response {
-            crate::tool_response::ToolResponse::FileSystem(s) => s,
-            _ => "".to_string(),
-        };
-        println!("{}", s);
+        println!("{}", response.to_string());
     }
 }
