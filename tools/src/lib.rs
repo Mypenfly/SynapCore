@@ -16,10 +16,10 @@ use crate::{
 
 pub mod define_call;
 pub mod error;
+mod fetch_url;
 mod files_extract;
 mod files_system;
 mod files_write;
-mod fetch_url;
 pub mod tool_response;
 mod web_search;
 
@@ -75,7 +75,19 @@ impl Default for Tools {
             params,
         };
 
-        let inner = vec![extract, write, web];
+        let sys = Inner {
+            name: "files_system".to_string(),
+            enable: true,
+            params: None,
+        };
+
+        let fetch = Inner {
+            name: "fetch_url".to_string(),
+            enable: true,
+            params: None,
+        };
+
+        let inner = vec![extract, write, web, sys, fetch];
 
         Self {
             sandbox_path: std::env::current_dir().unwrap_or_default(),
@@ -115,7 +127,7 @@ impl Tools {
             }
             "fetch_url" => {
                 use fetch_url::FetchUrl;
-                let fetch = FetchUrl{};
+                let fetch = FetchUrl {};
                 fetch.execute(&tool.function).await
             }
             _ => return Err(ToolErr::Unkown),
@@ -202,7 +214,7 @@ impl Tools {
             enabled_list.push(search_de);
         }
         if list.contains(&"fetch_url") {
-            let fetch_url =fetch_url::FetchUrl{} ;
+            let fetch_url = fetch_url::FetchUrl {};
             let desription = fetch_url.definition();
             enabled_list.push(desription);
         }
@@ -231,12 +243,12 @@ mod test {
         let _ = tools.init(&path);
         // println!("{:#?}",&tools);
 
-        // let args = "{\"query\":\"fulutter rust FFI flutter_rust_bridge 最佳实践\"}".to_string();
+        let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
         // let args ="{\"command\:\"ls\",\"path\":\"~/projects/rs-musicdog\",\"depth\":\"4\"}".to_string() ;
         // let args ="{\"command\":\"cp\",\"path\":\"~/projects/rs-musicdog/flake.lock\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
-        let args = "{\"url\":\"https://github.com/Shrans/GalSites\"}".to_string();
+        // let args = "{\"url\":\"https://github.com/Shrans/GalSites\"}".to_string();
         let function = Function {
-            name: Some("fetch_url".to_string()),
+            name: Some("web_search".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {

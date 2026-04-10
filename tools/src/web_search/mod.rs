@@ -16,7 +16,7 @@ pub type WebSearchResult<T> = Result<T, WebSearchErr>;
 ///参数设置
 #[derive(Serialize, Deserialize, Debug, Default)]
 struct Args {
-    query: Vec<String>,
+    query: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +51,7 @@ impl Tool for WebSearch {
             "type":"object",
             "properties":{
                 "query":{
-                    "type":"array",
+                    "type":"string",
                     "description":"你要搜索的问题，将会调用一次搜索的api"
                 },
                 "summary":{
@@ -104,6 +104,7 @@ impl Tool for WebSearch {
         };
         let mut args: Args = serde_json::from_str(arguments).unwrap_or_default();
         args.check_none();
+        // println!("args:{:#?}",&args);
         let responsse = self.send(&args).await;
 
         if let Err(e) = responsse {
@@ -154,7 +155,7 @@ impl WebSearch {
         // let path =PathBuf::from("./test.json") ;
         // let _ =fs::File::create_new(&path) ;
         // let _ =fs::write(path, raw.to_string()) ;
-        //  println!("===============raw================\n{:#?}\n",raw);
+        // println!("===============raw================\n{:#?}\n",raw);
         // println!("================serde==================\n");
         let content: SearchResult = serde_json::from_str(&raw).map_err(WebSearchErr::Serde)?;
 
@@ -176,7 +177,7 @@ impl WebSearch {
 #[derive(Serialize, Deserialize, Debug)]
 struct SearchResult {
     code: usize,
-    log_id: String,
+    log_id: Option<String>,
     msg: Option<String>,
     data: Data,
 }
@@ -184,7 +185,7 @@ struct SearchResult {
 #[derive(Serialize, Deserialize, Debug)]
 struct Data {
     #[serde(rename = "_type")]
-    data_type: String,
+    data_type: Option<String>,
     #[serde(rename = "webPages")]
     web_pages: WebPages,
 }
@@ -213,7 +214,7 @@ pub struct SearchValue {
     #[serde(rename = "siteIcon")]
     pub site_icon: String,
     #[serde(rename = "datePublished")]
-    pub data_last_published: String,
+    pub data_last_published: Option<String>,
     #[serde(rename = "dateLastCrawled")]
-    pub data_last_crawled: String,
+    pub data_last_crawled: Option<String>,
 }

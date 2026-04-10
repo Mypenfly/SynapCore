@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write, path::PathBuf};
+use std::{collections::HashMap, fmt::Display, io::Write, path::PathBuf};
 
 use crate::{
     assistant::{Assistant, Description},
@@ -9,6 +9,7 @@ use crate::{
     request_body::{LLMClient, messenge::Messenge, response::LLMResponse},
 };
 
+use base64::display;
 use tools::define_call::tool_call::ToolCall;
 
 mod assistant;
@@ -123,14 +124,14 @@ impl Core {
         files: Vec<&str>,
         enable_tools: bool,
         is_save: bool,
-    ) -> CoreResult<tokio::sync::mpsc::Receiver<String>> {
+    ) -> CoreResult<tokio::sync::mpsc::Receiver<BotResponse>> {
         self.temp_data.text = text.to_string();
         self.temp_data.files = files.iter().map(PathBuf::from).collect();
 
         let leader = self.config.agent.leader.character.clone();
 
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<CoreEvent>(1024);
-        let (out_tx, out_rx) = tokio::sync::mpsc::channel::<String>(1024);
+        let (out_tx, out_rx) = tokio::sync::mpsc::channel::<BotResponse>(1024);
 
         self.events_tx = Some(event_tx);
 
@@ -169,42 +170,15 @@ impl Core {
 
         tokio::spawn(async move {
             let mut is_complete = false;
-            let mut is_reasoning = false;
             let mut full_content = String::new();
-            let mut resoning_content = String::new();
             while let Ok(content) = rx.recv().await {
                 // full_content.push_str(&content);
                 match content {
                     LLMResponse::Nothing => break,
                     LLMResponse::Reasoning { chunk } => {
-                        // full_content.push_str(&chunk);
-                        if !is_reasoning {
-                            let chunk = format!("\n<think>\n{}", chunk);
-                            is_reasoning = true;
-                            resoning_content.push_str(&chunk);
-                        } else {
-                            resoning_content.push_str(&chunk);
-                        }
-                        let _ = event_sender
-                            .send(CoreEvent::Reasoning {
-                                chunk: resoning_content.clone(),
-                            })
-                            .await;
-                        resoning_content.clear();
+                        let _ = event_sender.send(CoreEvent::Reasoning { chunk }).await;
                     }
                     LLMResponse::Content { chunk } => {
-                        if is_reasoning {
-                            is_reasoning = false;
-
-                            resoning_content.push_str("\n</think>\n");
-
-                            let _ = event_sender
-                                .send(CoreEvent::Reasoning {
-                                    chunk: resoning_content.clone(),
-                                })
-                                .await;
-                            resoning_content.clear();
-                        }
                         full_content.push_str(&chunk);
                         let _ = event_sender.send(CoreEvent::Streaming { chunk }).await;
                     }
@@ -299,16 +273,16 @@ impl Core {
     async fn event_loop(
         mut self,
         mut event_rx: tokio::sync::mpsc::Receiver<CoreEvent>,
-        out_tx: tokio::sync::mpsc::Sender<String>,
+        out_tx: tokio::sync::mpsc::Sender<BotResponse>,
         mut bot: Assistant,
     ) -> CoreResult<()> {
         while let Some(event) = event_rx.recv().await {
             match event {
                 CoreEvent::Streaming { chunk } => {
-                    let _ = out_tx.send(chunk).await;
+                    let _ = out_tx.send(BotResponse::Content { chunk }).await;
                 }
                 CoreEvent::Reasoning { chunk } => {
-                    let _ = out_tx.send(chunk).await;
+                    let _ = out_tx.send(BotResponse::Reasoning { chunk }).await;
                 }
                 CoreEvent::Completed {
                     character,
@@ -332,9 +306,7 @@ impl Core {
                             bot.stop_ok = false;
                         }
 
-                        let _ = out_tx
-                            .send(format!("\n<Saved>{}</Saved>\n", &character))
-                            .await;
+                        let _ = out_tx.send(BotResponse::Save { character }).await;
                     } else if !is_save && bot.stop_ok {
                         break;
                     }
@@ -356,13 +328,15 @@ impl Core {
                     for tool in tools {
                         let name = tool.function.name.clone().unwrap_or("unkown".to_string());
                         let _ = out_tx
-                            .send(format!("\n<Tool>({}):{}</Tool>\n", &character, name))
+                            .send(BotResponse::ToolCall {
+                                name,
+                                arguments: tool.function.arguments.clone().unwrap_or_default(),
+                            })
                             .await;
 
                         self.tool(&mut bot, tool).await?;
-
-                        self.bot(&mut bot, true).await?;
                     }
+                    self.bot(&mut bot, true).await?;
                     //恢复
                     bot.stop_ok = true;
                 }
@@ -371,17 +345,13 @@ impl Core {
                     raw_content,
                 } => {
                     self.event_mem(&character, &raw_content).await?;
-                    let _ = out_tx
-                        .send(format!("\n<Stored>{}</Stored>\n", &character))
-                        .await;
+                    let _ = out_tx.send(BotResponse::Store { character }).await;
                     bot.stop_ok = true;
                     // break;
                 }
                 CoreEvent::Error { character, error } => {
                     // let (_, e) = LLMClient::remove_content(&error, "Error");
-                    let _ = out_tx
-                        .send(format!("EOF:\n({}){}\nEOF", character, error))
-                        .await;
+                    let _ = out_tx.send(BotResponse::Error { character, error }).await;
                     break;
                 }
                 CoreEvent::Finshed => {
@@ -396,41 +366,12 @@ impl Core {
     }
 
     async fn tool(&self, bot: &mut Assistant, tool: ToolCall) -> CoreResult<()> {
-        use tools::tool_response::ToolResponse;
+        // use tools::tool_response::ToolResponse;
         let response = self.tool.call(tool).await;
         // println!("\ntool-content:{}\n", &content);
         // bot.tool(content);
         if let Ok(content) = response {
-            match content {
-                ToolResponse::Extract(s) => bot.tool(s),
-                ToolResponse::Write(s) => bot.tool(s),
-                ToolResponse::WebSearch(list) => {
-                    let mut content = String::new();
-                    list.iter().for_each(|v| {
-                        content.push_str(&format!(
-                            "
-                            id:{}\n
-                            url:{}\n
-                            title:{}\n
-                            snippet:{}\n
-                            summary:{}\n
-                            site:{}\n
-                            publishData:{}\n
-                            updataData:{}\n",
-                            v.id,
-                            v.url,
-                            v.name,
-                            v.snippet,
-                            v.summary.clone().unwrap_or_default(),
-                            v.site_name,
-                            v.data_last_published,
-                            v.data_last_crawled
-                        ));
-                    });
-                    bot.tool(content);
-                }
-                ToolResponse::Error(s) => bot.tool(s),
-            }
+            bot.tool(content.to_string());
         }
         Ok(())
     }
@@ -648,12 +589,39 @@ impl Core {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum BotResponse {
+    Reasoning { chunk: String },
+    Content { chunk: String },
+    ToolCall { name: String, arguments: String },
+    Save { character: String },
+    Store { character: String },
+    Error { character: String, error: String },
+}
+
+impl Display for BotResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Reasoning { chunk } => write!(f, "{}", chunk),
+            Self::Content { chunk } => write!(f, "{}", chunk),
+            Self::ToolCall { name, arguments } => {
+                write!(f, "\n<Tool>\n{}:\n{}\n</Tool>\n\n", name, arguments)
+            }
+            Self::Save { character } => write!(f, "\n{}-Saved\n", character),
+            Self::Store { character } => write!(f, "\n{}-Stored\n", character),
+            Self::Error { character, error } => {
+                write!(f, "\nError-{} in character:{}\n", error, character)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
 
     use std::io::Write;
 
-    use crate::Core;
+    use crate::{BotResponse, Core};
 
     #[tokio::test]
     async fn test() {
@@ -664,20 +632,33 @@ mod test {
                 return;
             }
         };
-        core.config.agent.leader.agent = "glm".to_string();
+        // core.config.agent.leader.agent = "glm-4.7".to_string();
         // let mut core_2 = Core::init().unwrap();
 
         let mut rx = core
-            .task(
-                "行，那今天就先这样我先去准备休息了，bye 我亲爱的yore",
-                Vec::new(),
-                true,
-                true,
-            )
+            .task("做得不错，我明天会给你配置两项一个是日记系统，一个是TODOList，所以今天就先这样了，bye", Vec::new(), true, true)
             .await
             .unwrap();
 
+        let mut is_think = false;
         while let Some(content) = rx.recv().await {
+            match &content {
+                BotResponse::Reasoning { chunk: _ } => {
+                    if !is_think {
+                        is_think = true;
+                        print!("\n<think>\n");
+                        std::io::stdout().flush().unwrap();
+                    }
+                }
+                _ => {
+                    if is_think {
+                        is_think = false;
+                        print!("\n</think>\n");
+                        std::io::stdout().flush().unwrap();
+                    }
+                }
+            }
+
             print!("{}", content);
             // std::io::stdout().flush().unwrap();
             std::io::stdout().flush().unwrap();

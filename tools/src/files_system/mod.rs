@@ -87,7 +87,7 @@ impl Tool for FileSystem {
         };
 
         let args: Args = serde_json::from_str(arguments).unwrap_or_default();
-        println!("{:#?}", &args);
+        // println!("{:#?}", &args);
         let response = match self.command(&args) {
             Ok(s) => s,
             Err(e) => return ToolResponse::Error(format!("function files_system failed:{}", e)),
@@ -323,7 +323,7 @@ impl EntryDetil {
 
 impl Display for EntryDetil {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut content = String::new();
+        let mut content = "Hint: =>该路径为目录，->表示该路径为文件，显示的是完整路径".to_string();
         let mut sub_dirs_buf = Vec::new();
         for dir in &self.dirs {
             if sub_dirs_buf.contains(&dir) {

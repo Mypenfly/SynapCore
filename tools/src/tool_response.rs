@@ -28,15 +28,15 @@ impl Display for ToolResponse {
                     let mut content = String::new();
                     list.iter().for_each(|v| {
                         content.push_str(&format!(
-                            "id:{},url:{}\ntitle:{}\nsnippet:{}\nsummary:{}\nsite:{},publishData:{},updataData:{}\n",
+                            "id:{},url:{}\ntitle:{}\nsnippet:{}\nsummary:{}\nsite:{},publishData:{},updataData:{}\n\n",
                             v.id,
                             v.url,
                             v.name,
                             v.snippet,
                             v.summary.clone().unwrap_or_default(),
                             v.site_name,
-                            v.data_last_published,
-                            v.data_last_crawled
+                            v.data_last_published.clone().unwrap_or_default(),
+                            v.data_last_crawled.clone().unwrap_or_default()
                         ));
                     });
                     write!(f,"{}",content)
