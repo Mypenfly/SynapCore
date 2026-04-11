@@ -20,6 +20,7 @@ mod fetch_url;
 mod files_extract;
 mod files_system;
 mod files_write;
+mod note_book;
 pub mod tool_response;
 mod web_search;
 
@@ -41,8 +42,9 @@ pub struct Tools {
     sandbox_path: PathBuf,
     sandbox_dyn: bool,
     inner: Vec<Inner>,
-    // #[serde(skip)]
-    // map: Rc<RefCell<HashMap<String,Box<dyn Tool>>>>
+    #[serde(skip)]
+    character: String, // #[serde(skip)]
+                       // map: Rc<RefCell<HashMap<String,Box<dyn Tool>>>>
 }
 
 impl Default for Tools {
@@ -87,13 +89,19 @@ impl Default for Tools {
             params: None,
         };
 
-        let inner = vec![extract, write, web, sys, fetch];
+        let note = Inner {
+            name: "note_book".to_string(),
+            enable: true,
+            params: None,
+        };
+
+        let inner = vec![extract, write, web, sys, fetch, note];
 
         Self {
             sandbox_path: std::env::current_dir().unwrap_or_default(),
             sandbox_dyn: true,
             inner,
-            // map: Rc::new(RefCell::new(HashMap::new())),
+            character: "none".to_string(), // map: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 }
@@ -130,35 +138,38 @@ impl Tools {
                 let fetch = FetchUrl {};
                 fetch.execute(&tool.function).await
             }
+            "note_book" => {
+                use note_book::NoteBook;
+                let mut note = NoteBook::new();
+                note.character = self.character.clone();
+                // println!("note:{:#?}",note);
+                note.execute(&tool.function).await
+            }
             _ => return Err(ToolErr::Unkown),
         };
         Ok(response)
     }
-    pub fn init(&mut self, root: &Path) -> Result<Vec<ToolDefinition>, ToolErr> {
+    pub fn init(root: &Path, character: &str) -> Result<(Tools, Vec<ToolDefinition>), ToolErr> {
         // let mut list = Vec::new();
         let path = root.join("tools").join("tools.toml");
         Tools::confirm_path(&path)?;
-
-        let tools = Tools::loading_tools(&path)?;
-        self.sandbox_path = tools.sandbox_path;
-        self.sandbox_dyn = tools.sandbox_dyn;
-        self.inner = tools.inner;
-
+        let mut tools = Tools::loading_tools(&path)?;
+        tools.character = character.to_string();
         //处理一下动态的沙盒路径
-        if self.sandbox_dyn {
-            self.sandbox_path = std::env::current_dir().unwrap_or_default();
+        if tools.sandbox_dyn {
+            tools.sandbox_path = std::env::current_dir().unwrap_or_default();
         }
         // println!("Self:{:#?}",self);
 
-        let inner: &Vec<Inner> = self.inner.as_ref();
+        let inner: &Vec<Inner> = tools.inner.as_ref();
         let inner_enabled = inner
             .iter()
             .filter(|t| t.enable)
             .map(|t| t.name.as_str())
             .collect();
-        let list = self.get_enabled_inner(inner_enabled);
+        let list = tools.get_enabled_inner(inner_enabled);
 
-        Ok(list)
+        Ok((tools, list))
     }
     ///路径确认
     fn confirm_path(path: &Path) -> Result<(), ToolErr> {
@@ -223,12 +234,26 @@ impl Tools {
             let description = files_system.definition();
             enabled_list.push(description);
         }
+        if list.contains(&"note_book") {
+            let note = note_book::NoteBook::new();
+            let note_description = note.definition();
+            enabled_list.push(note_description);
+        }
         enabled_list
+    }
+
+    ///获取最新的note
+    pub fn get_last_note(&self) -> String {
+        let mut note = note_book::NoteBook::new();
+        note.character = self.character.clone();
+        note.get_last().unwrap_or_default()
     }
 }
 
 mod test {
     use std::path::PathBuf;
+
+    use docx_rs::Level;
 
     use crate::{
         Tools,
@@ -238,17 +263,19 @@ mod test {
     #[tokio::test]
     async fn test() {
         let root = "/home/mypenfly/.config/synapcore";
-        let mut tools = Tools::default();
+        // let mut tools = Tools::default();
         let path = PathBuf::from(root);
-        let _ = tools.init(&path);
-        // println!("{:#?}",&tools);
+        let (tools, list) = Tools::init(&path, "Yore").unwrap();
+        // tools = new_t;
+        // println!("{:#?}",&list);
 
-        let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
-        // let args ="{\"command\:\"ls\",\"path\":\"~/projects/rs-musicdog\",\"depth\":\"4\"}".to_string() ;
-        // let args ="{\"command\":\"cp\",\"path\":\"~/projects/rs-musicdog/flake.lock\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
-        // let args = "{\"url\":\"https://github.com/Shrans/GalSites\"}".to_string();
+        // let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
+        // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
+        let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
+        // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
+        //
         let function = Function {
-            name: Some("web_search".to_string()),
+            name: Some("files_system".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {
@@ -258,6 +285,9 @@ mod test {
             function,
         };
         let response = tools.call(call).await.unwrap();
-        println!("{}", response.to_string());
+        println!("{}", response);
+
+        // let last = tools.get_last_note();
+        // println!("last:{}", last);
     }
 }

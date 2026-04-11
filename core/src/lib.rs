@@ -9,8 +9,7 @@ use crate::{
     request_body::{LLMClient, messenge::Messenge, response::LLMResponse},
 };
 
-use base64::display;
-use tools::define_call::tool_call::ToolCall;
+use tools::{Tools, define_call::tool_call::ToolCall};
 
 mod assistant;
 mod config;
@@ -38,6 +37,7 @@ enum CoreEvent {
         raw_content: String,
         character: String,
         tools: Vec<ToolCall>,
+        is_save: bool,
     },
     Store {
         character: String,
@@ -196,6 +196,7 @@ impl Core {
                                 raw_content: full_content.clone(),
                                 character: event_ch.clone(),
                                 tools,
+                                is_save,
                             })
                             .await;
                         is_complete = true;
@@ -259,10 +260,9 @@ impl Core {
         }
 
         if enable_tools {
-            let list = self
-                .tool
-                .init(&self.config.normal.sc_root)
-                .map_err(CoreErr::ToolError)?;
+            let (tools, list) =
+                Tools::init(&self.config.normal.sc_root, character).map_err(CoreErr::ToolError)?;
+            self.tool = tools;
             bot.llm.postbody.tools = Some(list);
             // println!("\ntools:{:#?}\n",&bot.llm.postbody.tools)
         }
@@ -315,6 +315,7 @@ impl Core {
                     raw_content,
                     character,
                     tools,
+                    is_save,
                 } => {
                     //避免被截断
                     bot.stop_ok = false;
@@ -327,16 +328,24 @@ impl Core {
 
                     for tool in tools {
                         let name = tool.function.name.clone().unwrap_or("unkown".to_string());
+                        let args_raw = tool.function.arguments.clone().unwrap_or_default();
+                        let arguments = if args_raw.len() >= 150 {
+                            args_raw[0..100].to_string()
+                        } else {
+                            args_raw
+                        };
+
                         let _ = out_tx
                             .send(BotResponse::ToolCall {
+                                character: character.clone(),
                                 name,
-                                arguments: tool.function.arguments.clone().unwrap_or_default(),
+                                arguments,
                             })
                             .await;
 
                         self.tool(&mut bot, tool).await?;
                     }
-                    self.bot(&mut bot, true).await?;
+                    self.bot(&mut bot, is_save).await?;
                     //恢复
                     bot.stop_ok = true;
                 }
@@ -371,6 +380,7 @@ impl Core {
         // println!("\ntool-content:{}\n", &content);
         // bot.tool(content);
         if let Ok(content) = response {
+            // println!("tool response:{}",&content);
             bot.tool(content.to_string());
         }
         Ok(())
@@ -563,7 +573,7 @@ impl Core {
             // println!("{}",mem);
         }
         //填充回对话
-        let _ = bot.llm.postbody.session.compression(number);
+        let _ = bot.llm.postbody.session.compression(2, number);
         let messenge = Messenge::user(format!("(以下是前面部分对话的记忆\n:{})", &content));
         bot.llm.postbody.session.add_messenge(messenge);
 
@@ -591,12 +601,27 @@ impl Core {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BotResponse {
-    Reasoning { chunk: String },
-    Content { chunk: String },
-    ToolCall { name: String, arguments: String },
-    Save { character: String },
-    Store { character: String },
-    Error { character: String, error: String },
+    Reasoning {
+        chunk: String,
+    },
+    Content {
+        chunk: String,
+    },
+    ToolCall {
+        character: String,
+        name: String,
+        arguments: String,
+    },
+    Save {
+        character: String,
+    },
+    Store {
+        character: String,
+    },
+    Error {
+        character: String,
+        error: String,
+    },
 }
 
 impl Display for BotResponse {
@@ -604,8 +629,16 @@ impl Display for BotResponse {
         match self {
             Self::Reasoning { chunk } => write!(f, "{}", chunk),
             Self::Content { chunk } => write!(f, "{}", chunk),
-            Self::ToolCall { name, arguments } => {
-                write!(f, "\n<Tool>\n{}:\n{}\n</Tool>\n\n", name, arguments)
+            Self::ToolCall {
+                character,
+                name,
+                arguments,
+            } => {
+                write!(
+                    f,
+                    "\n<Tool ch={}>\n{}:\n{}\n</Tool>\n\n",
+                    character, name, arguments
+                )
             }
             Self::Save { character } => write!(f, "\n{}-Saved\n", character),
             Self::Store { character } => write!(f, "\n{}-Stored\n", character),
@@ -632,11 +665,16 @@ mod test {
                 return;
             }
         };
-        // core.config.agent.leader.agent = "glm-4.7".to_string();
+        core.config.agent.leader.agent = "glm-4.7".to_string();
         // let mut core_2 = Core::init().unwrap();
 
         let mut rx = core
-            .task("做得不错，我明天会给你配置两项一个是日记系统，一个是TODOList，所以今天就先这样了，bye", Vec::new(), true, true)
+            .task(
+                "不错应该是可以了，接下来我会给你配置todo list，马上你就可以正式上任了！！不过你还有一个任务，将./目录下的那些markdown文件删除，除了memoryFormat.md",
+                Vec::new(),
+                true,
+                false,
+            )
             .await
             .unwrap();
 

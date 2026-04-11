@@ -29,7 +29,7 @@ impl Tool for FileSystem {
     fn definition(&self) -> crate::define_call::tool_define::ToolDefinition {
         let name = "files_system".to_string();
         let description = format!(
-            "文件系统操作,部分操作如rm的路径和cp的路径只能局限在沙盒中。当前沙盒路径为：{}",
+            "文件系统操作,部分操作如rm的路径和cp的路径只能局限在沙盒中。当前沙盒路径为：{},(注意：这个文件系统是给agent做的简易系统，不是一个个完整的shell命令，请严格按照说明使用)",
             &self.sand_box.display()
         );
 
@@ -50,11 +50,11 @@ impl Tool for FileSystem {
                 },
                 "pattern":{
                     "type":"string",
-                    "description":"grep时的匹配内容，在grep是此项是必须的"
+                    "description":"grep时的匹配内容，在grep是此项是必须的。支持文件后缀检索，如:.md,但不支持正则（\\.md$）"
                 },
                 "depth":{
                     "type":"number",
-                    "description":"ls,grep时的检索递归深度，默认是0"
+                    "description":"ls,grep时的检索递归深度，默认是1"
                 },
                 "target_path":{
                     "type":"string",
@@ -80,13 +80,17 @@ impl Tool for FileSystem {
         self,
         function: &crate::define_call::tool_call::Function,
     ) -> crate::tool_response::ToolResponse {
-        println!("{:#?}", &function);
+        // println!("{:#?}", &function);
         let arguments = match &function.arguments {
             Some(s) => s,
             None => return ToolResponse::Error("function files_system lack arguments".to_string()),
         };
 
-        let args: Args = serde_json::from_str(arguments).unwrap_or_default();
+        let result: Result<Args, serde_json::Error> = serde_json::from_str(arguments);
+        if let Err(e) = result {
+            return ToolResponse::Error(format!("function files_system failed : {}", e));
+        }
+        let args = result.unwrap();
         // println!("{:#?}", &args);
         let response = match self.command(&args) {
             Ok(s) => s,
@@ -112,9 +116,9 @@ impl FileSystem {
         // println!("path_cow:{:#?}",&path_cow);
         let root_path = PathBuf::from(path_cow.as_ref());
         let root = std::fs::canonicalize(root_path).unwrap_or_default();
-        println!("root:{}", &root.display());
+        // println!("root:{}", &root.display());
 
-        let depth = args.depth.unwrap_or(0);
+        let depth = args.depth.unwrap_or(1);
 
         match args.command.as_str() {
             "ls" => Ok(FileSystem::ls(&root, depth)?.to_string()),
@@ -154,7 +158,7 @@ impl FileSystem {
                 Ok(self.cp(&root, &target))
             }
             "rm" => Ok(self.rm(&root)),
-            _ => Ok(format!("command :{},not found", &args.command)),
+            _ => Ok(format!("command :{}not found", &args.command)),
         }
     }
 
@@ -162,7 +166,10 @@ impl FileSystem {
     fn ls(root: &PathBuf, depth: usize) -> Result<EntryDetil, FileSystemErr> {
         use walkdir::WalkDir;
         // let mut detil = EntryDetil::default();
-        let mut detil = EntryDetil::new(root.clone());
+        let mut detil = EntryDetil {
+            root: root.clone(),
+            trees: Vec::new(),
+        };
         // detil.root = root.clone();
 
         let walker = WalkDir::new(root).max_depth(depth).into_iter();
@@ -171,27 +178,38 @@ impl FileSystem {
             let entry = entry.map_err(FileSystemErr::Walk)?;
             let path = entry.path();
             if path.is_dir() {
-                detil.dirs.push(path.to_path_buf());
+                detil.build_tree(path);
+                continue;
             }
 
             if path.is_file() {
-                detil.files.push(path.to_path_buf());
+                detil.add_in_tree(path.parent().unwrap(), path);
             }
         }
 
         Ok(detil)
     }
 
-    fn grep(root: &PathBuf, pattern: &str, depth: usize) -> Result<Vec<MathDetil>, FileSystemErr> {
+    pub(crate) fn grep(
+        root: &PathBuf,
+        pattern: &str,
+        depth: usize,
+    ) -> Result<Vec<MathDetil>, FileSystemErr> {
+        let pattern = pattern.to_lowercase();
         let mut list = Vec::new();
 
         let walker = walkdir::WalkDir::new(root).max_depth(depth).into_iter();
 
         for entry in walker {
+            let mut detil = MathDetil::default();
             let entry = entry.map_err(FileSystemErr::Walk)?;
             let path = entry.path();
             if path.is_dir() {
                 continue;
+            }
+            let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("./");
+            if name.to_lowercase().contains(&pattern) {
+                detil.file = path.to_path_buf();
             }
 
             let file = std::fs::File::open(path).map_err(FileSystemErr::Fs)?;
@@ -202,7 +220,7 @@ impl FileSystem {
                 .enumerate()
                 .filter_map(|(i, line)| {
                     let line = line.ok()?;
-                    if line.contains(pattern) {
+                    if line.to_lowercase().contains(&pattern) {
                         Some(LineContent {
                             num: i + 1,
                             content: line,
@@ -212,14 +230,13 @@ impl FileSystem {
                     }
                 })
                 .collect::<Vec<_>>();
-            if lines.is_empty() {
-                continue;
+            if !lines.is_empty() {
+                detil = MathDetil {
+                    file: path.to_path_buf(),
+                    lines,
+                };
             }
 
-            let detil = MathDetil {
-                file: path.to_path_buf(),
-                lines,
-            };
             list.push(detil);
         }
         // Ok(())
@@ -283,73 +300,55 @@ impl FileSystem {
 #[derive(Default)]
 struct EntryDetil {
     root: PathBuf,
-    files: Vec<PathBuf>,
-    dirs: Vec<PathBuf>,
-}
-
-impl EntryDetil {
-    fn new(root: PathBuf) -> Self {
-        let files = Vec::new();
-        let dirs = Vec::new();
-        Self { root, files, dirs }
-    }
-
-    ///处理dir遍历输出格式化
-    fn walk_dir(&self, dir: &PathBuf) -> (String, Vec<&PathBuf>) {
-        let mut content = String::new();
-        // let mut sub_dirs_buf = Vec::new();
-
-        content.push_str(&format!("\t=>{}\n", dir.to_str().unwrap_or("error:Unkown")));
-
-        let sub_files: Vec<&PathBuf> = self
-            .files
-            .iter()
-            .filter(|f| f.parent().unwrap_or(&PathBuf::default()) == dir)
-            .collect();
-        // write!(f,"{}\n",dir.to_str().unwrap_or("error:unkown"))?;
-        for sub_file in sub_files {
-            // write!(f,"\t->{}\n",sub_file.to_str().unwrap_or("error:unkown"));
-            content.push_str(&format!(
-                "\t\t->{}\n",
-                sub_file.to_str().unwrap_or("error:Unkown")
-            ));
-        }
-
-        let sub_dirs = self.dirs.iter().filter(|f| f.starts_with(dir)).collect();
-        // Ok(())
-        (content, sub_dirs)
-    }
+    trees: Vec<EntryTree>,
 }
 
 impl Display for EntryDetil {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut content = "Hint: =>该路径为目录，->表示该路径为文件，显示的是完整路径".to_string();
-        let mut sub_dirs_buf = Vec::new();
-        for dir in &self.dirs {
-            if sub_dirs_buf.contains(&dir) {
-                continue;
-            }
-
-            let (res, dirs) = self.walk_dir(dir);
-            content.push_str(&res);
-
-            if dirs.is_empty() {
-                break;
-            }
-
-            for sub_dir in &dirs {
-                let (res, _) = self.walk_dir(sub_dir);
-                content.push_str(&res);
-            }
-            sub_dirs_buf.extend(dirs);
+        let mut content = format!("EntryDetils in root:{}\n", self.root.display());
+        for tree in &self.trees {
+            content.push_str(&tree.to_string());
         }
-        // Ok(())
-        write!(f, "{}:\n{}", &self.root.display(), content)
+        write!(f, "{}", content)
+    }
+}
+
+impl EntryDetil {
+    fn build_tree(&mut self, dir: &Path) {
+        let tree = EntryTree {
+            dir: dir.to_path_buf(),
+            files: Vec::new(),
+        };
+        self.trees.push(tree);
+    }
+
+    fn add_in_tree(&mut self, dir: &Path, file: &Path) {
+        let tree = match self.trees.iter_mut().find(|t| t.dir == *dir) {
+            Some(t) => t,
+            None => return,
+        };
+
+        tree.files.push(file.to_path_buf());
+    }
+}
+#[derive(Default, Clone)]
+struct EntryTree {
+    dir: PathBuf,
+    files: Vec<PathBuf>,
+}
+
+impl Display for EntryTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut content = format!("\n📂 {}\n", self.dir.display());
+        for file in &self.files {
+            content.push_str(&format!("\t📄 {}\n", file.display()));
+        }
+        write!(f, "{}", content)
     }
 }
 
 #[derive(Default)]
-struct MathDetil {
+pub(crate) struct MathDetil {
     file: PathBuf,
     lines: Vec<LineContent>,
 }
@@ -367,12 +366,14 @@ struct LineContent {
 
 impl Display for MathDetil {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut content = "\n|  line  |--------content--------|\n\n".to_string();
-
+        let mut content = format!("path:{}\n", self.file.display());
+        if !self.lines.is_empty() {
+            content = "\n|  line  |--------content--------|\n\n".to_string();
+        }
         for line in &self.lines {
             content.push_str(&format!("{}\t{}\n", line.num, &line.content));
         }
 
-        write!(f, "file:{}\n{}\n", &self.file.display(), content)
+        write!(f, "{}", content)
     }
 }

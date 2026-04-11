@@ -9,6 +9,7 @@ pub enum ToolResponse {
     WebSearch(Vec<SearchValue>),
     FileSystem(String),
     FetchUrl{url:String,content:String},
+    NoteBook{mode:String,content:String},
     Error(String)
 }
 
@@ -43,6 +44,7 @@ impl Display for ToolResponse {
             }
             Self::FileSystem(s)=>write!(f,"{}",s),
             Self::FetchUrl { url, content }=>write!(f,"{} :\n{}",url,content),
+            Self::NoteBook { mode, content }=>write!(f,"mode:{}\n{}",mode,content),
             Self::Error(e)=> write!(f,"{}",e)
         }
     }

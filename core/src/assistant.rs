@@ -177,6 +177,13 @@ impl Assistant {
 
         self.llm.postbody.session.add_messenge(messenge);
     }
+
+    ///last note注入
+    pub fn note_into(&mut self,note:String) {
+        let messenge = Messenge::system(format!("这是你最新的一篇note:\n{}",note));
+        self.llm.postbody.session.add_into(messenge, 1);
+        
+    }
 }
 
 ///对助手的描述

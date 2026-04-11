@@ -27,13 +27,23 @@ impl Session {
     pub fn add_messenge(&mut self, messenge: Messenge) {
         self.messenge.push_back(messenge);
     }
+    ///指定位置添加
+    pub fn add_into(&mut self,messenge: Messenge,position:usize) {
+        let len = self.messenge.len();
+
+        if len < position {
+            self.messenge.push_back(messenge);
+        }else {
+            self.messenge[position] = messenge;
+        }
+    }
     ///提取消息
     pub fn get_messenges(&self) -> Vec<&Messenge> {
         self.messenge.iter().collect()
     }
     ///压缩对话，从第一项开始是避免将系统提示词给覆盖了，应该能减少tokens
-    pub fn compression(&mut self, n: usize) -> Vec<Messenge> {
-        self.messenge.drain(1..n).collect()
+    pub fn compression(&mut self, from:usize,to: usize) -> Vec<Messenge> {
+        self.messenge.drain(from..to).collect()
     }
     ///转化成api格式
     pub fn format_api(&self) -> Vec<serde_json::Value> {
