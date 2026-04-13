@@ -55,7 +55,7 @@ impl Tool for FileWriter {
         }
     }
 
-    async fn execute(self, function: &crate::define_call::tool_call::Function) -> ToolResponse {
+    async fn execute(&self, function: &crate::define_call::tool_call::Function) -> ToolResponse {
         let arguments = match &function.arguments {
             Some(s) => s,
             None => return ToolResponse::Error("lack arguments".to_string()),

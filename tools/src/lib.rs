@@ -11,6 +11,7 @@ use crate::{
     },
     error::ToolErr,
     files_write::FileWriter,
+    search_tools::ToolsManager,
     tool_response::ToolResponse,
 };
 
@@ -21,6 +22,7 @@ mod files_extract;
 mod files_system;
 mod files_write;
 mod note_book;
+mod search_tools;
 pub mod tool_response;
 mod web_search;
 
@@ -44,7 +46,12 @@ pub struct Tools {
     inner: Vec<Inner>,
     #[serde(skip)]
     character: String, // #[serde(skip)]
-                       // map: Rc<RefCell<HashMap<String,Box<dyn Tool>>>>
+    #[serde(skip)]
+    manager: ToolsManager,
+    // all_tools:Vec<ToolDefinition>,
+    #[serde(skip)]
+    active_tools: Vec<ToolDefinition>,
+    // map: Rc<RefCell<HashMap<String,Box<dyn Tool>>>>
 }
 
 impl Default for Tools {
@@ -102,13 +109,34 @@ impl Default for Tools {
             sandbox_dyn: true,
             inner,
             character: "none".to_string(), // map: Rc::new(RefCell::new(HashMap::new())),
+            manager: ToolsManager::default(),
+            active_tools: Vec::new(),
         }
     }
 }
 
 impl Tools {
-    pub async fn call(&self, tool: ToolCall) -> Result<ToolResponse, ToolErr> {
+    pub async fn call(&mut self, tool: ToolCall) -> Result<ToolResponse, ToolErr> {
         let response = match tool.function.name.clone().unwrap_or_default().as_str() {
+            "tools_manager" => {
+                let res = self.manager.execute(&tool.function).await;
+                if let ToolResponse::Manager { mode, definations } = &res {
+                    match mode.as_str() {
+                        "search" => ToolResponse::ManagerAdd(res.to_string()),
+                        "add" => {
+                            let names: Vec<String> = definations
+                                .iter()
+                                .map(|d| d.function.name.to_string())
+                                .collect();
+                            self.active_tools.extend(definations.clone());
+                            ToolResponse::ManagerAdd(format!("add function :{:?}", names))
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    ToolResponse::Error("Function tools_manager error occured".to_string())
+                }
+            }
             "files_extract" => {
                 let extract = ExtractTool;
                 extract.execute(&tool.function).await
@@ -149,7 +177,7 @@ impl Tools {
         };
         Ok(response)
     }
-    pub fn init(root: &Path, character: &str) -> Result<(Tools, Vec<ToolDefinition>), ToolErr> {
+    pub fn init(root: &Path, character: &str) -> Result<Tools, ToolErr> {
         // let mut list = Vec::new();
         let path = root.join("tools").join("tools.toml");
         Tools::confirm_path(&path)?;
@@ -161,15 +189,17 @@ impl Tools {
         }
         // println!("Self:{:#?}",self);
 
-        let inner: &Vec<Inner> = tools.inner.as_ref();
-        let inner_enabled = inner
+        // let inner: &Vec<Inner> = tools.inner.as_ref();
+        let inner_enabled = tools
+            .inner
             .iter()
             .filter(|t| t.enable)
-            .map(|t| t.name.as_str())
+            .map(|t| t.name.to_string())
             .collect();
-        let list = tools.get_enabled_inner(inner_enabled);
+        tools.get_enabled_inner(inner_enabled);
+        // let list =tools.active_tools.clone() ;
 
-        Ok((tools, list))
+        Ok(tools)
     }
     ///路径确认
     fn confirm_path(path: &Path) -> Result<(), ToolErr> {
@@ -202,8 +232,9 @@ impl Tools {
     }
 
     ///解析内部可用工具
-    fn get_enabled_inner(&self, list: Vec<&str>) -> Vec<ToolDefinition> {
+    fn get_enabled_inner(&mut self, list: Vec<String>) {
         let mut enabled_list = Vec::new();
+        let list: Vec<&str> = list.iter().map(|s| s.as_str()).collect();
 
         if list.contains(&"files_extract") {
             let files_extract = files_extract::ExtractTool;
@@ -234,12 +265,18 @@ impl Tools {
             let description = files_system.definition();
             enabled_list.push(description);
         }
+        //笔记工具提前保留，让模型可以习惯使用
         if list.contains(&"note_book") {
             let note = note_book::NoteBook::new();
             let note_description = note.definition();
-            enabled_list.push(note_description);
+            self.active_tools.push(note_description);
+            // enabled_list.push(note_description);
         }
-        enabled_list
+        self.manager = ToolsManager {
+            enabled: enabled_list,
+        };
+
+        self.active_tools.push(self.manager.definition());
     }
 
     ///获取最新的note
@@ -247,6 +284,9 @@ impl Tools {
         let mut note = note_book::NoteBook::new();
         note.character = self.character.clone();
         note.get_last().unwrap_or_default()
+    }
+    pub fn get_active(&self) -> Vec<ToolDefinition> {
+        self.active_tools.clone()
     }
 }
 
@@ -265,17 +305,17 @@ mod test {
         let root = "/home/mypenfly/.config/synapcore";
         // let mut tools = Tools::default();
         let path = PathBuf::from(root);
-        let (tools, list) = Tools::init(&path, "Yore").unwrap();
+        let mut tools = Tools::init(&path, "Yore").unwrap();
         // tools = new_t;
         // println!("{:#?}",&list);
 
         // let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
         // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
-        let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
+        // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
         // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
-        //
+        let args = "{\"action\":\"add\",\"query\":\"files_system\"}".to_string();
         let function = Function {
-            name: Some("files_system".to_string()),
+            name: Some("tools_manager".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {
@@ -286,6 +326,7 @@ mod test {
         };
         let response = tools.call(call).await.unwrap();
         println!("{}", response);
+        println!("{:#?}", tools);
 
         // let last = tools.get_last_note();
         // println!("last:{}", last);

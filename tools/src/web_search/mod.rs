@@ -95,7 +95,7 @@ impl Tool for WebSearch {
         }
     }
     async fn execute(
-        self,
+        &self,
         function: &crate::define_call::tool_call::Function,
     ) -> crate::tool_response::ToolResponse {
         let arguments = match &function.arguments {

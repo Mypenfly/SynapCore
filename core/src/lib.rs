@@ -260,10 +260,11 @@ impl Core {
         }
 
         if enable_tools {
-            let (tools, list) =
+            let tools =
                 Tools::init(&self.config.normal.sc_root, character).map_err(CoreErr::ToolError)?;
             self.tool = tools;
-            bot.llm.postbody.tools = Some(list);
+            // bot.llm.postbody.tools = Some(self.tool);
+            bot.llm.postbody.tools = Some(self.tool.get_active());
             // println!("\ntools:{:#?}\n",&bot.llm.postbody.tools)
         }
         Ok(bot)
@@ -374,15 +375,16 @@ impl Core {
         Ok(())
     }
 
-    async fn tool(&self, bot: &mut Assistant, tool: ToolCall) -> CoreResult<()> {
+    async fn tool(&mut self, bot: &mut Assistant, tool: ToolCall) -> CoreResult<()> {
         // use tools::tool_response::ToolResponse;
         let response = self.tool.call(tool).await;
         // println!("\ntool-content:{}\n", &content);
         // bot.tool(content);
         if let Ok(content) = response {
-            // println!("tool response:{}",&content);
+            println!("tool response:{}", &content);
             bot.tool(content.to_string());
         }
+        bot.llm.postbody.tools = Some(self.tool.get_active());
         Ok(())
     }
 
@@ -665,12 +667,12 @@ mod test {
                 return;
             }
         };
-        core.config.agent.leader.agent = "glm-4.7".to_string();
+        core.config.agent.leader.agent = "deepseek".to_string();
         // let mut core_2 = Core::init().unwrap();
 
         let mut rx = core
             .task(
-                "不错应该是可以了，接下来我会给你配置todo list，马上你就可以正式上任了！！不过你还有一个任务，将./目录下的那些markdown文件删除，除了memoryFormat.md",
+                "给你一个任务：调查一下立体化学的发展历程，每个阶段都解决了啥问题？要求写成一个详细报告，并且要写入你的note_book作为你的学习内容",
                 Vec::new(),
                 true,
                 false,

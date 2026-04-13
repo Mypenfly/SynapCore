@@ -1,9 +1,11 @@
 use std::fmt::Display;
 
-use crate::{files_extract::ExtractRes, web_search::SearchValue};
+use crate::{define_call::tool_define::ToolDefinition, files_extract::ExtractRes, web_search::SearchValue};
 
 #[derive(Debug)]
 pub enum ToolResponse {
+    Manager{mode:String,definations:Vec<ToolDefinition>},
+    ManagerAdd(String),
     Extract(Vec<ExtractRes>),
     Write{path:String,content:String},
     WebSearch(Vec<SearchValue>),
@@ -16,6 +18,10 @@ pub enum ToolResponse {
 impl Display for ToolResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Manager { mode, definations }=> {
+                write!(f,"mode:{}\nlist:{:?}",mode,definations)
+            }
+            Self::ManagerAdd(s) =>write!(f,"{}",s),
             Self::Extract(list)=>{
                 let mut content = String::new();
                 list.iter().for_each(|v|{

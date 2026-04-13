@@ -54,7 +54,7 @@ impl Tool for ExtractTool {
     //     }
     //     })
     // }
-    async fn execute(self,function:&Function)-> ToolResponse {
+    async fn execute(&self,function:&Function)-> ToolResponse {
     let arguments =match &function.arguments{
         Some(s) => s,
         None => return ToolResponse::Error("Function files_extract lacks arguments".to_string())

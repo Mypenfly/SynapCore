@@ -33,7 +33,7 @@ impl Tool for NoteBook {
         let name = "note_book".to_string();
         let description ="这是一个记事本工具(也是一个你的专属日记)，提供 read,write,find 权限：
             1.read: 当你认为你需要从你曾经写的note中读取内容时调用。
-            2.write: 当你觉得有哪些信息,想法，感受不能忘记，十分重要以供你未来查询时，或者你的情绪波动较大时，调用。
+            2.write: 当你觉得有哪些信息,想法，感受不能忘记,或者学习到新的知识，十分重要以供你未来查询时，或者你的情绪波动较大时，调用。
             3.find: 根据关键词查找note".to_string() ;
         let parameters = serde_json::json!({
             "type":"object",
@@ -71,7 +71,7 @@ impl Tool for NoteBook {
     }
 
     async fn execute(
-        self,
+        &self,
         function: &crate::define_call::tool_call::Function,
     ) -> crate::tool_response::ToolResponse {
         let arguments = match &function.arguments {
