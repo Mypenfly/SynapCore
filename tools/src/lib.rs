@@ -1,18 +1,14 @@
 use std::{
     collections::HashMap,
     fs,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, rc::Rc, sync::Arc,
 };
 
 use crate::{
     define_call::{
         tool_call::ToolCall,
         tool_define::{Tool, ToolDefinition},
-    },
-    error::ToolErr,
-    files_write::FileWriter,
-    search_tools::ToolsManager,
-    tool_response::ToolResponse,
+    }, error::ToolErr, files_write::FileWriter, outer::{OuterTools, config::Outer}, search_tools::ToolsManager, tool_response::ToolResponse
 };
 
 pub mod define_call;
@@ -22,6 +18,7 @@ mod files_extract;
 mod files_system;
 mod files_write;
 mod note_book;
+mod outer;
 mod search_tools;
 pub mod tool_response;
 mod web_search;
@@ -44,6 +41,8 @@ pub struct Tools {
     sandbox_path: PathBuf,
     sandbox_dyn: bool,
     inner: Vec<Inner>,
+    #[serde(skip_serializing_if ="Vec::is_empty")]
+    outer:Arc<Vec<Outer>>,
     #[serde(skip)]
     character: String, // #[serde(skip)]
     #[serde(skip)]
@@ -103,11 +102,13 @@ impl Default for Tools {
         };
 
         let inner = vec![extract, write, web, sys, fetch, note];
+        let outer =vec![Outer::default()] ;
 
         Self {
             sandbox_path: std::env::current_dir().unwrap_or_default(),
             sandbox_dyn: true,
             inner,
+            outer:Arc::new(outer),
             character: "none".to_string(), // map: Rc::new(RefCell::new(HashMap::new())),
             manager: ToolsManager::default(),
             active_tools: Vec::new(),
@@ -173,7 +174,22 @@ impl Tools {
                 // println!("note:{:#?}",note);
                 note.execute(&tool.function).await
             }
-            _ => return Err(ToolErr::Unkown),
+            _ => {
+                if self.outer.is_empty() {
+                    
+                
+                
+                return Err(ToolErr::Unkown)
+                }
+
+                // let outers = self.outer.as_ref();
+
+                let tools = OuterTools{
+                    outers:Arc::clone(&self.outer)
+                };
+
+                tools.execute(&tool.function).await
+            },
         };
         Ok(response)
     }
@@ -197,6 +213,7 @@ impl Tools {
             .map(|t| t.name.to_string())
             .collect();
         tools.get_enabled_inner(inner_enabled);
+        tools.get_outer_enable();
         // let list =tools.active_tools.clone() ;
 
         Ok(tools)
@@ -279,6 +296,20 @@ impl Tools {
         self.active_tools.push(self.manager.definition());
     }
 
+    ///解析外部可用工具
+    fn get_outer_enable(&mut self) {
+        if self.outer.is_empty() {
+            return;
+        }
+
+        let tools = OuterTools{
+            outers:Arc::clone(&self.outer)
+        };
+
+        let list = tools.defination();
+        self.manager.enabled.extend(list);
+    }
+
     ///获取最新的note
     pub fn get_last_note(&self) -> String {
         let mut note = note_book::NoteBook::new();
@@ -297,7 +328,7 @@ mod test {
 
     use crate::{
         Tools,
-        define_call::tool_call::{self, Function},
+        define_call::tool_call::{self, Function}, outer::{OuterTools, config::Outer},
     };
 
     #[tokio::test]
@@ -306,16 +337,16 @@ mod test {
         // let mut tools = Tools::default();
         let path = PathBuf::from(root);
         let mut tools = Tools::init(&path, "Yore").unwrap();
-        // tools = new_t;
-        // println!("{:#?}",&list);
+        // // tools = new_t;
+        // // println!("{:#?}",&list);
 
-        // let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
-        // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
-        // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
+        // // let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
+        // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
+        // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
         // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
-        let args = "{\"action\":\"add\",\"query\":\"files_system\"}".to_string();
+        let args = "{\"source\":\"douban\"}".to_string();
         let function = Function {
-            name: Some("tools_manager".to_string()),
+            name: Some("get_hits".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {
@@ -326,8 +357,10 @@ mod test {
         };
         let response = tools.call(call).await.unwrap();
         println!("{}", response);
-        println!("{:#?}", tools);
-
+        // println!("{:#?}", tools);
+        //
+        // let outers =vec![Outer::default(),Outer::default()];
+        
         // let last = tools.get_last_note();
         // println!("last:{}", last);
     }

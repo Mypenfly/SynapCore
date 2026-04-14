@@ -1,0 +1,21 @@
+[[outers]]
+name = "TOOL NAME"
+description = "TOOL DESCRIPTION"
+enabled = true
+exec = "EXEC OUTER COMMAND"
+required = []
+
+[outers.parameters."Paramter name"]
+type = "string"
+description = "YOUR PARAMTERS DESCRIPTION"
+
+[[outers]]
+name = "TOOL NAME"
+description = "TOOL DESCRIPTION"
+enabled = true
+exec = "EXEC OUTER COMMAND"
+required = []
+
+[outers.parameters."Paramter name"]
+type = "string"
+description = "YOUR PARAMTERS DESCRIPTION"
