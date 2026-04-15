@@ -30,6 +30,10 @@ pub enum ToolResponse {
         name: String,
         output: String,
     },
+    Executor {
+        command: String,
+        content: String,
+    },
     Error(String),
 }
 
@@ -69,6 +73,7 @@ impl Display for ToolResponse {
             Self::FetchUrl { url, content } => write!(f, "{} :\n{}", url, content),
             Self::NoteBook { mode, content } => write!(f, "mode:{}\n{}", mode, content),
             Self::OuterTool { name, output } => write!(f, "name:{}\n{}", name, output),
+            Self::Executor { command, content } => write!(f, "cmd:{}\n{}", command, content),
             Self::Error(e) => write!(f, "{}", e),
         }
     }

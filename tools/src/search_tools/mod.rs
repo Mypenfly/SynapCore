@@ -57,9 +57,17 @@ impl Tool for ToolsManager {
             return ToolResponse::Error(format!("Function tools_manager failed: {}",e));
         };
         let args =result.unwrap() ;
+
         match args.action.as_str() {
             "search"=> self.search(&args.query),
-            "add" => self.add(&args.query),
+            "add" => {
+                let query = args.query;
+                if query == "all" {
+                    ToolResponse::Manager { mode: "add".to_string(), definations: self.enabled.clone() }
+                }else {
+                    self.add(&query)
+                }
+            },
             _ => ToolResponse::Error(format!("Function tools_manager unkown action : {}",&args.action))
         }
         

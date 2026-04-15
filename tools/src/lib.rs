@@ -1,18 +1,27 @@
 use std::{
     collections::HashMap,
     fs,
-    path::{Path, PathBuf}, rc::Rc, sync::Arc,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::Arc,
 };
 
 use crate::{
     define_call::{
         tool_call::ToolCall,
         tool_define::{Tool, ToolDefinition},
-    }, error::ToolErr, files_write::FileWriter, outer::{OuterTools, config::Outer}, search_tools::ToolsManager, tool_response::ToolResponse
+    },
+    error::ToolErr,
+    executer::Executor,
+    files_write::FileWriter,
+    outer::{OuterTools, config::Outer},
+    search_tools::ToolsManager,
+    tool_response::ToolResponse,
 };
 
 pub mod define_call;
 pub mod error;
+mod executer;
 mod fetch_url;
 mod files_extract;
 mod files_system;
@@ -41,8 +50,8 @@ pub struct Tools {
     sandbox_path: PathBuf,
     sandbox_dyn: bool,
     inner: Vec<Inner>,
-    #[serde(skip_serializing_if ="Vec::is_empty")]
-    outer:Arc<Vec<Outer>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    outer: Arc<Vec<Outer>>,
     #[serde(skip)]
     character: String, // #[serde(skip)]
     #[serde(skip)]
@@ -102,13 +111,13 @@ impl Default for Tools {
         };
 
         let inner = vec![extract, write, web, sys, fetch, note];
-        let outer =vec![Outer::default()] ;
+        let outer = vec![Outer::default()];
 
         Self {
             sandbox_path: std::env::current_dir().unwrap_or_default(),
             sandbox_dyn: true,
             inner,
-            outer:Arc::new(outer),
+            outer: Arc::new(outer),
             character: "none".to_string(), // map: Rc::new(RefCell::new(HashMap::new())),
             manager: ToolsManager::default(),
             active_tools: Vec::new(),
@@ -174,22 +183,24 @@ impl Tools {
                 // println!("note:{:#?}",note);
                 note.execute(&tool.function).await
             }
+            "executor" => {
+                use executer::Executor;
+                let executor = Executor {};
+                executor.execute(&tool.function).await
+            }
             _ => {
                 if self.outer.is_empty() {
-                    
-                
-                
-                return Err(ToolErr::Unkown)
+                    return Err(ToolErr::Unkown);
                 }
 
                 // let outers = self.outer.as_ref();
 
-                let tools = OuterTools{
-                    outers:Arc::clone(&self.outer)
+                let tools = OuterTools {
+                    outers: Arc::clone(&self.outer),
                 };
 
                 tools.execute(&tool.function).await
-            },
+            }
         };
         Ok(response)
     }
@@ -282,6 +293,11 @@ impl Tools {
             let description = files_system.definition();
             enabled_list.push(description);
         }
+        if list.contains(&"executor") {
+            let executor = Executor {};
+            let description = executor.definition();
+            enabled_list.push(description);
+        }
         //笔记工具提前保留，让模型可以习惯使用
         if list.contains(&"note_book") {
             let note = note_book::NoteBook::new();
@@ -302,8 +318,8 @@ impl Tools {
             return;
         }
 
-        let tools = OuterTools{
-            outers:Arc::clone(&self.outer)
+        let tools = OuterTools {
+            outers: Arc::clone(&self.outer),
         };
 
         let list = tools.defination();
@@ -328,7 +344,8 @@ mod test {
 
     use crate::{
         Tools,
-        define_call::tool_call::{self, Function}, outer::{OuterTools, config::Outer},
+        define_call::tool_call::{self, Function},
+        outer::{OuterTools, config::Outer},
     };
 
     #[tokio::test]
@@ -344,9 +361,9 @@ mod test {
         // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
         // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
         // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
-        let args = "{\"source\":\"douban\"}".to_string();
+        let args = "{\"command\":\"cargo\",\"args\":[\"check\"]}".to_string();
         let function = Function {
-            name: Some("get_hits".to_string()),
+            name: Some("executor".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {
@@ -357,10 +374,10 @@ mod test {
         };
         let response = tools.call(call).await.unwrap();
         println!("{}", response);
-        // println!("{:#?}", tools);
+        println!("{:#?}", tools);
         //
         // let outers =vec![Outer::default(),Outer::default()];
-        
+
         // let last = tools.get_last_note();
         // println!("last:{}", last);
     }
