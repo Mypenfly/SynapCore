@@ -34,6 +34,10 @@ pub enum ToolResponse {
         command: String,
         content: String,
     },
+    Bash {
+        command: String,
+        output: String,
+    },
     Error(String),
 }
 
@@ -74,6 +78,7 @@ impl Display for ToolResponse {
             Self::NoteBook { mode, content } => write!(f, "mode:{}\n{}", mode, content),
             Self::OuterTool { name, output } => write!(f, "name:{}\n{}", name, output),
             Self::Executor { command, content } => write!(f, "cmd:{}\n{}", command, content),
+            Self::Bash { command, output } => write!(f, ">{}\n{}\n", command, output),
             Self::Error(e) => write!(f, "{}", e),
         }
     }

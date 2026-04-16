@@ -8,7 +8,7 @@
 name = "get_weather"
 description = "获取天气"
 enable = true
-exec = "python ~/.local/share/synapcore_plugins/tools/get_weather.py"
+exec = ["python","./test.py"]
 required = ["location"]
 
 [outer.parameters."location"]

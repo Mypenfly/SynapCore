@@ -2,11 +2,11 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    rc::Rc,
     sync::Arc,
 };
 
 use crate::{
+    bash::Bash,
     define_call::{
         tool_call::ToolCall,
         tool_define::{Tool, ToolDefinition},
@@ -19,6 +19,7 @@ use crate::{
     tool_response::ToolResponse,
 };
 
+mod bash;
 pub mod define_call;
 pub mod error;
 mod executer;
@@ -156,12 +157,14 @@ impl Tools {
                 write.execute(&tool.function).await
             }
             "web_search" => {
+                // println!("Inner:{:#?}",&self.inner);
                 let params = self
                     .inner
                     .iter()
                     .find(|i| i.name == "web_search")
                     .map(|w| w.params.clone().unwrap_or_default())
-                    .unwrap_or_default();
+                    .unwrap();
+                // println!("Raw:{:#?}",&params);
                 let search = web_search::WebSearch { params };
                 search.execute(&tool.function).await
             }
@@ -187,6 +190,15 @@ impl Tools {
                 use executer::Executor;
                 let executor = Executor {};
                 executor.execute(&tool.function).await
+            }
+            "bash" => {
+                use bash::Bash;
+                let mut bash = Bash::new();
+                if let Err(e) = bash.init() {
+                    return Ok(ToolResponse::Error(e.to_string()));
+                }
+
+                bash.execute(&tool.function).await
             }
             _ => {
                 if self.outer.is_empty() {
@@ -298,6 +310,11 @@ impl Tools {
             let description = executor.definition();
             enabled_list.push(description);
         }
+        if list.contains(&"bash") {
+            let bash = Bash::new();
+            let description = bash.definition();
+            enabled_list.push(description);
+        }
         //笔记工具提前保留，让模型可以习惯使用
         if list.contains(&"note_book") {
             let note = note_book::NoteBook::new();
@@ -361,9 +378,10 @@ mod test {
         // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
         // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
         // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
-        let args = "{\"command\":\"cargo\",\"args\":[\"check\"]}".to_string();
+        let args = "{\"command\":[\"which\",\"nu\"]}".to_string();
+        // let args ="{\"\": 15, \"query\": \"硅基流动 SiliconFlow 商业模式 盈利模式 API聚合\", \"summary\": true}".to_string() ;
         let function = Function {
-            name: Some("executor".to_string()),
+            name: Some("bash".to_string()),
             arguments: Some(args),
         };
         let call = tool_call::ToolCall {
@@ -374,7 +392,7 @@ mod test {
         };
         let response = tools.call(call).await.unwrap();
         println!("{}", response);
-        println!("{:#?}", tools);
+        // println!("{:#?}", tools);
         //
         // let outers =vec![Outer::default(),Outer::default()];
 

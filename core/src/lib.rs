@@ -667,12 +667,12 @@ mod test {
                 return;
             }
         };
-        core.config.agent.leader.agent = "deepseek".to_string();
+        core.config.agent.leader.agent = "glm-5.1".to_string();
         // let mut core_2 = Core::init().unwrap();
 
         let mut rx = core
             .task(
-                "给你一个任务：调查一下立体化学的发展历程，每个阶段都解决了啥问题？要求写成一个详细报告，并且要写入你的note_book作为你的学习内容",
+                "给你一个任务：调查一下各种llm api聚合平台（像硅基流动这样的），维度：各家的不同点，竞争优势，最后是研究一下它们的盈利模式，以及这种平台的存在价值，以及未来是否继续存在？要求写成一个详细报告（写到./下），并且将要点你的note_book作为你的学习内容",
                 Vec::new(),
                 true,
                 false,

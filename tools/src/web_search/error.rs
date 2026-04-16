@@ -9,4 +9,6 @@ pub enum WebSearchErr {
     Analyze(reqwest::Error),
     #[error("Serde failed:{0}")]
     Serde(serde_json::Error),
+    #[error("Config error:{0}\nplease check the tools/tools.toml")]
+    Config(String),
 }

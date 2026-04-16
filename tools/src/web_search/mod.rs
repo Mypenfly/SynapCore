@@ -40,7 +40,7 @@ impl Args {
 }
 
 ///联网搜索
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WebSearch {
     pub params: HashMap<String, String>,
 }
@@ -98,6 +98,7 @@ impl Tool for WebSearch {
         &self,
         function: &crate::define_call::tool_call::Function,
     ) -> crate::tool_response::ToolResponse {
+        // println!("Self:{:#?}",&self);
         let arguments = match &function.arguments {
             Some(s) => s,
             None => return ToolResponse::Error("lack arguments".to_string()),
@@ -119,8 +120,25 @@ impl WebSearch {
     async fn send(&self, args: &Args) -> WebSearchResult<Vec<SearchValue>> {
         let client = Client::new();
 
-        let url = self.params.get("base_url").unwrap();
-        let api_key = self.params.get("api_key").unwrap();
+        // println!("params:{:#?}",&self.params);
+
+        let url = match self.params.get("base_url") {
+            Some(u) => u,
+            None => {
+                return Err(WebSearchErr::Config(
+                    "Not Found BASE URL in Tools Config File".to_string(),
+                ));
+            }
+        };
+        let api_key = match self.params.get("api_key") {
+            Some(a) => a,
+
+            None => {
+                return Err(WebSearchErr::Config(
+                    "Not Found BASE URL in Tools Config File".to_string(),
+                ));
+            }
+        };
         // println!("url:{}",url);
 
         let response = client
