@@ -330,8 +330,14 @@ impl Core {
                     for tool in tools {
                         let name = tool.function.name.clone().unwrap_or("unkown".to_string());
                         let args_raw = tool.function.arguments.clone().unwrap_or_default();
-                        let arguments = if args_raw.len() >= 150 {
-                            args_raw[0..100].to_string()
+                        let max_len = 120;
+                        let arguments = if args_raw.len() >= max_len {
+                            let suffix = "......";
+                            let available_chars = max_len.saturating_sub(suffix.chars().count());
+
+                            let content: String = args_raw.chars().take(available_chars).collect();
+
+                            format!("{} {}", content, suffix)
                         } else {
                             args_raw
                         };
@@ -667,12 +673,14 @@ mod test {
                 return;
             }
         };
-        core.config.agent.leader.agent = "glm-5.1".to_string();
+        core.config.agent.leader.agent = "deepseek".to_string();
         // let mut core_2 = Core::init().unwrap();
+        // core.get_bot("Yore", true);
+        // println!("{:#?}", core);
 
         let mut rx = core
             .task(
-                "给你一个任务：调查一下各种llm api聚合平台（像硅基流动这样的），维度：各家的不同点，竞争优势，最后是研究一下它们的盈利模式，以及这种平台的存在价值，以及未来是否继续存在？要求写成一个详细报告（写到./下），并且将要点你的note_book作为你的学习内容",
+                "yore,请你尝试使用todo_list这个工具，应该可以了",
                 Vec::new(),
                 true,
                 false,

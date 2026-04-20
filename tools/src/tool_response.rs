@@ -38,6 +38,10 @@ pub enum ToolResponse {
         command: String,
         output: String,
     },
+    TodoList {
+        action: String,
+        content: String,
+    },
     Error(String),
 }
 
@@ -79,6 +83,7 @@ impl Display for ToolResponse {
             Self::OuterTool { name, output } => write!(f, "name:{}\n{}", name, output),
             Self::Executor { command, content } => write!(f, "cmd:{}\n{}", command, content),
             Self::Bash { command, output } => write!(f, ">{}\n{}\n", command, output),
+            Self::TodoList { action, content } => write!(f, "action:{}\n{}", action, content),
             Self::Error(e) => write!(f, "{}", e),
         }
     }

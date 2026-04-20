@@ -16,6 +16,7 @@ use crate::{
     files_write::FileWriter,
     outer::{OuterTools, config::Outer},
     search_tools::ToolsManager,
+    todo_list::TodoList,
     tool_response::ToolResponse,
 };
 
@@ -30,6 +31,7 @@ mod files_write;
 mod note_book;
 mod outer;
 mod search_tools;
+mod todo_list;
 pub mod tool_response;
 mod web_search;
 
@@ -200,6 +202,10 @@ impl Tools {
 
                 bash.execute(&tool.function).await
             }
+            "todo_list" => {
+                let todo = TodoList::new(self.character.clone());
+                todo.execute(&tool.function).await
+            }
             _ => {
                 if self.outer.is_empty() {
                     return Err(ToolErr::Unkown);
@@ -315,6 +321,11 @@ impl Tools {
             let description = bash.definition();
             enabled_list.push(description);
         }
+        if list.contains(&"todo_list") {
+            let todo = TodoList::new(self.character.clone());
+            let description = todo.definition();
+            enabled_list.push(description);
+        }
         //笔记工具提前保留，让模型可以习惯使用
         if list.contains(&"note_book") {
             let note = note_book::NoteBook::new();
@@ -378,21 +389,21 @@ mod test {
         // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
         // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
         // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
-        let args = "{\"command\":[\"which\",\"nu\"]}".to_string();
-        // let args ="{\"\": 15, \"query\": \"硅基流动 SiliconFlow 商业模式 盈利模式 API聚合\", \"summary\": true}".to_string() ;
-        let function = Function {
-            name: Some("bash".to_string()),
-            arguments: Some(args),
-        };
-        let call = tool_call::ToolCall {
-            index: 0,
-            id: Some("test".to_string()),
-            tool_type: Some("function".to_string()),
-            function,
-        };
-        let response = tools.call(call).await.unwrap();
-        println!("{}", response);
-        // println!("{:#?}", tools);
+        // let args = "{\"action\":\"read\",\"list\":[\"test\",\"this is todo list\",\"need in cache dir\"],\"id\":2,\"update_state\":\"error\"}".to_string();
+        // // let args ="{\"\": 15, \"query\": \"硅基流动 SiliconFlow 商业模式 盈利模式 API聚合\", \"summary\": true}".to_string() ;
+        // let function = Function {
+        //     name: Some("todo_list".to_string()),
+        //     arguments: Some(args),
+        // };
+        // let call = tool_call::ToolCall {
+        //     index: 0,
+        //     id: Some("test".to_string()),
+        //     tool_type: Some("function".to_string()),
+        //     function,
+        // };
+        // let response = tools.call(call).await.unwrap();
+        // println!("{}", response);
+        println!("{:#?}", tools);
         //
         // let outers =vec![Outer::default(),Outer::default()];
 
