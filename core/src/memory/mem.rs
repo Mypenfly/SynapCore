@@ -335,6 +335,7 @@ impl MemoryStore {
 #[derive(Debug)]
 pub struct SearchResult {
     pub memory: Memory,
+    #[allow(dead_code)]
     pub similarity: f32,
     pub final_score: f32,
 }
@@ -355,7 +356,6 @@ pub struct MemoryConfig {
     pub top_k: usize,
 }
 
-
 // mod test{
 //     use std::path::Path;
 
@@ -365,7 +365,7 @@ pub struct MemoryConfig {
 //     async fn test() {
 //         let json = JsonConfig::from_file(&Path::new("/home/mypenfly/.config/synapcore/api.json")).unwrap();
 //         let config =json.get_config("siliconflow", "qwen_embed").unwrap() ;
-        
+
 //         let store = MemoryStore::open("/home/mypenfly/.config/synapcore/memory/Yore.db", config).unwrap();
 
 //         let query = store.embedding_client.embed("UserFeedBack").await.unwrap();
@@ -380,6 +380,6 @@ pub struct MemoryConfig {
 //         let result = store.search(&query, &mem_config).unwrap();
 
 //         println!("{:#?}",result);
-        
+
 //     }
 // }

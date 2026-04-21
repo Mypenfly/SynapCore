@@ -56,29 +56,31 @@ impl Tool for Outer {
 
         // println!("exec:{}", &self.exec);
         if self.exec.is_empty() {
-            return ToolResponse::OuterTool { name: name.clone(), output: "解析 exec 错误".to_string() };
+            return ToolResponse::OuterTool {
+                name: name.clone(),
+                output: "解析 exec 错误".to_string(),
+            };
         }
 
         //解析选项和命令参数
         let mut cmd = Command::new(&self.exec[0]);
         //
         // 命令参数
-        for (i,e) in self.exec.iter().enumerate() {
-            if i==0 {
+        for (i, e) in self.exec.iter().enumerate() {
+            if i == 0 {
                 continue;
             }
             cmd.arg(e);
         }
         //选项
-        for (k,v) in args {
-            cmd.arg(format!("--{}",k));
-            
+        for (k, v) in args {
+            cmd.arg(format!("--{}", k));
+
             cmd.arg(v.as_str().unwrap());
         }
-        
+
         // println!("CMD: {:#?}",&cmd);
 
-        
         let output = match cmd.output() {
             Ok(o) => o,
             Err(e) => return ToolResponse::Error(format!("{} 执行异常 {}", name, e)),
@@ -87,12 +89,12 @@ impl Tool for Outer {
         // println!("ouput:{:#?}",&output);
         //
         //错误处理
-        let text =String::from_utf8(output.stdout).unwrap_or_default() ;
-        if  text.is_empty() {
+        let text = String::from_utf8(output.stdout).unwrap_or_default();
+        if text.is_empty() {
             let error = String::from_utf8(output.stderr).unwrap_or_default();
-            return ToolResponse::Error(format!("{} 执行异常： {}",name,error));
+            return ToolResponse::Error(format!("{} 执行异常： {}", name, error));
         }
-        
+
         ToolResponse::OuterTool {
             name: self.name.clone(),
             output: text,

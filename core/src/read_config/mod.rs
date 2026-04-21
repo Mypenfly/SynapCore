@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    fs,
-    io::Write,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, fs, io::Write, path::Path};
 
 use serde::{Deserialize, Serialize};
 
@@ -77,29 +72,29 @@ impl Default for JsonConfig {
 impl JsonConfig {
     pub fn from_file(path: &Path) -> JsonResult<Self> {
         if !path.exists() {
-            return Err(JsonErr::GetConfigError("未找到配置文件".to_string()));
+            return Err(JsonErr::GetConfig("未找到配置文件".to_string()));
         }
 
-        let content = fs::read_to_string(path).map_err(JsonErr::ReadError)?;
+        let content = fs::read_to_string(path).map_err(JsonErr::Read)?;
 
         // println!("{:#?}",content);
 
-        serde_json::from_str(&content).map_err(JsonErr::ConvertError)
+        serde_json::from_str(&content).map_err(JsonErr::Convert)
     }
 
     pub fn rewrite_config(&self, path: &Path) -> JsonResult<()> {
         // println!("SELF:\n{:#?}\n",&self);
         if let Some(root_path) = path.parent() {
             std::fs::create_dir_all(root_path)
-                .map_err(|e| JsonErr::GetConfigError(format!("创建目录失败:{}", e)))?;
+                .map_err(|e| JsonErr::GetConfig(format!("创建目录失败:{}", e)))?;
         }
 
-        let new_config = serde_json::to_string_pretty(self).map_err(JsonErr::ConvertError)?;
+        let new_config = serde_json::to_string_pretty(self).map_err(JsonErr::Convert)?;
 
         // File::create 以写模式打开文件，文件不存在则创建，存在则截断
-        let mut file = std::fs::File::create(path).map_err(JsonErr::FileOpenError)?;
+        let mut file = std::fs::File::create(path).map_err(JsonErr::FileOpen)?;
         file.write_all(new_config.as_bytes())
-            .map_err(JsonErr::FileOpenError)?;
+            .map_err(JsonErr::FileOpen)?;
         Ok(())
     }
 
@@ -114,7 +109,7 @@ impl JsonConfig {
             .collect();
 
         if list.is_empty() {
-            return Err(JsonErr::GetConfigError(format!(
+            return Err(JsonErr::GetConfig(format!(
                 "未找到：provider({})",
                 provider
             )));
@@ -133,7 +128,7 @@ impl JsonConfig {
         }
 
         if llm_config.model_id.is_empty() {
-            return Err(JsonErr::GetConfigError(format!("未找到：model({})", model)));
+            return Err(JsonErr::GetConfig(format!("未找到：model({})", model)));
         }
 
         Ok(llm_config)

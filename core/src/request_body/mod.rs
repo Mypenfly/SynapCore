@@ -244,7 +244,6 @@ impl LLMClient {
                     None => continue,
                 };
 
-            
                 if let Some(delta) = &choice.delta {
                     if let Some(reasoning) = &delta.reasoning_content {
                         // println!("{}",&reasoning);

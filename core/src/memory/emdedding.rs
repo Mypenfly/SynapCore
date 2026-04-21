@@ -11,16 +11,15 @@ pub enum EmbeddingErr {
 
 pub type EmbeddingResult<T> = Result<T, EmbeddingErr>;
 
-
-impl Display for EmbeddingErr  {
+impl Display for EmbeddingErr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ApiError(s) => write!(f,"{}",s),
+            Self::ApiError(s) => write!(f, "{}", s),
         }
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct EmbeddingClient {
     base_url: String,
     api_key: String,
@@ -46,7 +45,7 @@ impl EmbeddingClient {
         // let key = self.api_key.clone();
 
         // println!("url:{}\nkey:{}",&url,&key);
-        
+
         let response = self
             .client
             .post(format!("{}/embeddings", &self.base_url))
@@ -61,8 +60,6 @@ impl EmbeddingClient {
             .await
             .map_err(|e| EmbeddingErr::ApiError(e.to_string()))?;
 
-        
-        
         if !response.status().is_success() {
             let error = response.text().await.unwrap_or("falied".to_string());
 

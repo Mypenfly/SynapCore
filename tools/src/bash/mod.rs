@@ -6,7 +6,6 @@ use tokio::process::Command;
 use tokio::sync::{Mutex, mpsc};
 
 use crate::bash::error::BashErr;
-use crate::define_call::tool_call::Function;
 use crate::define_call::tool_define::{FunctionDefinition, Tool, ToolDefinition};
 use crate::tool_response::ToolResponse;
 

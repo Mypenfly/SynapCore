@@ -130,7 +130,7 @@ impl Assistant {
             let mut messenge = Messenge::user(message.clone());
 
             if !data.files.is_empty() {
-               let _ = messenge.add_files(&data.files);
+                let _ = messenge.add_files(&data.files);
             }
 
             if let Some(m) = mem_config
@@ -154,7 +154,6 @@ impl Assistant {
                         error: e,
                     })?;
             }
-
 
             self.llm.postbody.session.add_messenge(messenge);
         }
@@ -184,10 +183,9 @@ impl Assistant {
     }
 
     ///last note注入
-    pub fn note_into(&mut self,note:String) {
-        let messenge = Messenge::system(format!("这是你最新的一篇note:\n{}",note));
+    pub fn note_into(&mut self, note: String) {
+        let messenge = Messenge::system(format!("这是你最新的一篇note:\n{}", note));
         self.llm.postbody.session.add_into(messenge, 1);
-        
     }
 }
 

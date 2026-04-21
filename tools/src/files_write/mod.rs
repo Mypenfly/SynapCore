@@ -73,7 +73,10 @@ impl Tool for FileWriter {
         }
 
         let response = format!("Function files_write success:\n{}\n\n", &args.content);
-        ToolResponse::Write { path: args.path.clone(), content: response }
+        ToolResponse::Write {
+            path: args.path.clone(),
+            content: response,
+        }
     }
 }
 
@@ -103,8 +106,8 @@ impl FileWriter {
 
     fn is_within(&self, path: &Path) -> bool {
         let path_str = match path.to_str() {
-            Some(s)=>s,
-            None=>return false
+            Some(s) => s,
+            None => return false,
         };
         let path_cow = shellexpand::tilde(path_str);
 
@@ -114,7 +117,7 @@ impl FileWriter {
             let _ = std::fs::create_dir_all(parent);
             let _ = std::fs::File::create_new(&path);
         }
-        
+
         let canonical = match fs::canonicalize(path) {
             Ok(p) => p,
             Err(_) => return false,

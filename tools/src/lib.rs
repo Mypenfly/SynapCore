@@ -31,6 +31,7 @@ mod files_write;
 mod note_book;
 mod outer;
 mod search_tools;
+mod timer;
 mod todo_list;
 pub mod tool_response;
 mod web_search;
@@ -113,7 +114,13 @@ impl Default for Tools {
             params: None,
         };
 
-        let inner = vec![extract, write, web, sys, fetch, note];
+        let timer = Inner {
+            name: "timer".to_string(),
+            enable: true,
+            params: None,
+        };
+
+        let inner = vec![extract, write, web, sys, fetch, note, timer];
         let outer = vec![Outer::default()];
 
         Self {
@@ -205,6 +212,11 @@ impl Tools {
             "todo_list" => {
                 let todo = TodoList::new(self.character.clone());
                 todo.execute(&tool.function).await
+            }
+            "timer" => {
+                use timer::TimerTool;
+                let timer_tool = TimerTool;
+                timer_tool.execute(&tool.function).await
             }
             _ => {
                 if self.outer.is_empty() {
@@ -334,10 +346,14 @@ impl Tools {
             self.active_tools.push(note_description);
             // enabled_list.push(note_description);
         }
+        if list.contains(&"timer") {
+            let timer_tool = timer::TimerTool;
+            let description = timer_tool.definition();
+            enabled_list.push(description);
+        }
         self.manager = ToolsManager {
             enabled: enabled_list,
         };
-
     }
 
     ///解析外部可用工具
@@ -364,4 +380,3 @@ impl Tools {
         self.active_tools.clone()
     }
 }
-

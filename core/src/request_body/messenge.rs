@@ -46,6 +46,7 @@ impl Messenge {
             tool_call_id: None,
         }
     }
+    #[allow(dead_code)]
     pub fn call_with_tool(mut self, tool: ToolCall) -> Self {
         self.tool_call = Some(vec![tool]);
         self
@@ -123,7 +124,7 @@ impl Messenge {
             let path = PathBuf::from(cow_path.as_ref());
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt");
             if IMAGE_EXT.contains(&ext) {
-                let _ =self.add_imge(&file.to_string());
+                let _ = self.add_imge(&file.to_string());
             } else {
                 other.push(file.to_string());
             }
@@ -140,13 +141,14 @@ impl Messenge {
             Err(e) => format!("ERR :{}", e),
         };
 
-        let con =Content{
-            content_type:"text".to_string(),
-            text:Some(format!(
-            "(system :以下是用户的提供的文件内容,如果只有一行 ERR:... 说明用户上传失败了)\n{}\n",
-            content
-        )),image_url:None
-    };
+        let con = Content {
+            content_type: "text".to_string(),
+            text: Some(format!(
+                "(system :以下是用户的提供的文件内容,如果只有一行 ERR:... 说明用户上传失败了)\n{}\n",
+                content
+            )),
+            image_url: None,
+        };
 
         self.content.push(con);
 

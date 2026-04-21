@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     read_config::{Params, Provider},
-    request_body::{session::Session},
+    request_body::session::Session,
 };
 
 use tools::define_call::tool_define::ToolDefinition;

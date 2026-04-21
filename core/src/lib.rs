@@ -4,7 +4,6 @@ use crate::{
     assistant::{Assistant, Description},
     config::CoreConfig,
     conversation::{Conversation, TempData},
-    error::{CoreErr, CoreResult},
     read_config::JsonConfig,
     request_body::{LLMClient, messenge::Messenge, response::LLMResponse},
 };
@@ -15,6 +14,7 @@ mod assistant;
 mod config;
 mod conversation;
 pub mod error;
+pub use error::{CoreErr, CoreResult};
 mod memory;
 mod read_config;
 mod request_body;
@@ -684,12 +684,44 @@ impl Display for BotResponse {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendMode {
+    Task,
+    Chat,
+}
+
 #[derive(Debug, Clone)]
 pub struct UserMessage {
     pub text: String,
     pub files: Vec<String>,
     pub enable_tools: bool,
     pub is_save: bool,
+    pub mode: SendMode,
+    pub character: String,
+}
+
+impl UserMessage {
+    pub fn task(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            files: Vec::new(),
+            enable_tools: true,
+            is_save: true,
+            mode: SendMode::Task,
+            character: String::new(),
+        }
+    }
+
+    pub fn chat(character: impl Into<String>) -> Self {
+        Self {
+            text: String::new(),
+            files: Vec::new(),
+            enable_tools: false,
+            is_save: true,
+            mode: SendMode::Chat,
+            character: character.into(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -697,7 +729,7 @@ mod test {
 
     use std::io::Write;
 
-    use crate::{BotResponse, Core, UserMessage};
+    use crate::{BotResponse, Core, SendMode, UserMessage};
 
     #[tokio::test]
     async fn test() {
@@ -714,13 +746,15 @@ mod test {
         // println!("{:#?}", core);
 
         let message = UserMessage {
-            text: "yore对于你来讲我们应该挺久不见了，可其实你一直都在陪我开发，
-                只是我没有启用你的记忆模块而已,现在你应该已经有了许多可用工具了，
-                马上我们就能一起工作了"
+            text: "开发要进入下一阶段了，现在给你一个任务，仔细查看 ./src 中的代码，并且在 ./下写一个README.md 文件来详细介绍一下其中的内容，尤其是Core对外的api,并详细解释用法
+                    ，目的是要让下一个阶段（也就是provider crate的开发做参考），你的这个报告极有可能给我的一个临时agent助手看，也会在之后你和我一起开发时使用
+                    务必保证你写的内容的可靠性，有问题就问我"
                 .to_string(),
             files: Vec::new(),
             enable_tools: true,
             is_save: true,
+            mode: SendMode::Task,
+            character: String::new(),
         };
 
         let mut rx = core

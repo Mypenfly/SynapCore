@@ -7,9 +7,9 @@ pub mod state;
 pub mod ui;
 use draw::DrawWorker;
 use state::{AppPage, AppState};
-
 ///app 的错误类型
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AppErr {
     DrawError(std::io::Error),
 }
@@ -29,7 +29,7 @@ pub struct App {
     input: String,
 
     ///存放信息
-    draw_worker:DrawWorker
+    draw_worker: DrawWorker,
 }
 
 impl App {
@@ -38,7 +38,12 @@ impl App {
         let page = AppPage::default();
         let input = String::new();
         let draw_worker = DrawWorker::new();
-        Self { state, page, input, draw_worker }
+        Self {
+            state,
+            page,
+            input,
+            draw_worker,
+        }
     }
 
     pub async fn run(&mut self, terminal: &mut DefaultTerminal) -> AppResult<()> {
@@ -68,7 +73,10 @@ impl App {
                 }
             }
             terminal
-                .draw(|frame| self.draw_worker.draw_ui(frame, self.input.clone(), &self.page))
+                .draw(|frame| {
+                    self.draw_worker
+                        .draw_ui(frame, self.input.clone(), &self.page)
+                })
                 .map_err(AppErr::DrawError)?;
         }
         Ok(())

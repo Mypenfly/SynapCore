@@ -1,11 +1,11 @@
-
-#[derive(Clone, Copy,Debug,Default,PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum AppState {
     #[default]
     Running,
-    Stopped
+    Stopped,
 }
-#[derive(Clone,Debug,Default,PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[allow(dead_code)]
 pub enum AppPage {
     #[default]
     StartPage,

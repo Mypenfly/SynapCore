@@ -8,6 +8,7 @@ use ratatui::crossterm::{
 };
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum MainErr {
     TermianlError(std::io::Error),
     AppError(AppErr),

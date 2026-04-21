@@ -7,7 +7,7 @@ use ratatui::{
 
 const LOGO: &str = include_str!("./logo.txt");
 ///启动页
-pub fn render_start(frame: &mut Frame, area: Rect ) {
+pub fn render_start(frame: &mut Frame, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([

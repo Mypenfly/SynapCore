@@ -1,6 +1,17 @@
 [package]
-name = "provider"
+name = "synapcore_provider"
 edition.workspace = true
 version.workspace = true
 
 [dependencies]
+synapcore_core = { path = "../core" }
+tools = { path = "../tools" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+notify-rust = "4"
+uuid = { version = "1", features = ["v4"] }
+dirs = "5"
+thiserror = "2"
+regex = "1"
