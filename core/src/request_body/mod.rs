@@ -168,7 +168,10 @@ impl LLMClient {
         );
         body_map.insert("tool_choices".to_string(), json!("auto"));
         body_map.insert("top_p".to_string(), json!(self.postbody.params.top_p));
-        body_map.insert("enable_thinking".to_string(), json!(self.postbody.params.enable_thinking));
+        body_map.insert(
+            "enable_thinking".to_string(),
+            json!(self.postbody.params.enable_thinking),
+        );
         body_map
     }
     ///流式响应
@@ -241,8 +244,10 @@ impl LLMClient {
                     None => continue,
                 };
 
+            
                 if let Some(delta) = &choice.delta {
                     if let Some(reasoning) = &delta.reasoning_content {
+                        // println!("{}",&reasoning);
                         if !in_reasoning {
                             in_reasoning = true;
                             // reasoning_buf.push_str(&format!("\n<think>\n{}", reasoning));
@@ -253,6 +258,7 @@ impl LLMClient {
                             .map_err(APIErr::SendError)?;
 
                             content_buf.clear();
+                            reasoning_buf.push_str(reasoning);
                         } else {
                             reasoning_buf.push_str(reasoning);
                         }

@@ -120,7 +120,7 @@ impl Core {
     ///任务派发
     pub async fn task(
         &mut self,
-        message:&UserMessage,
+        message: &UserMessage,
     ) -> CoreResult<tokio::sync::mpsc::Receiver<BotResponse>> {
         self.temp_data.text = message.text.to_string();
         self.temp_data.files = message.files.clone();
@@ -148,11 +148,10 @@ impl Core {
     pub async fn chat(
         &mut self,
         character: &str,
-        message:&UserMessage,
+        message: &UserMessage,
     ) -> CoreResult<tokio::sync::mpsc::Receiver<BotResponse>> {
         self.temp_data.text = message.text.to_string();
         self.temp_data.files = message.files.clone();
-
 
         let (event_tx, event_rx) = tokio::sync::mpsc::channel::<CoreEvent>(1024);
         let (out_tx, out_rx) = tokio::sync::mpsc::channel::<BotResponse>(1024);
@@ -294,7 +293,7 @@ impl Core {
         //笔记注入
         let note = self.tool.get_last_note();
         bot.note_into(note);
-        
+
         Ok(bot)
     }
 
@@ -685,12 +684,12 @@ impl Display for BotResponse {
     }
 }
 
-#[derive(Debug,Clone)]
-pub struct UserMessage{
-    pub text:String,
-    pub files:Vec<String>,
-    pub enable_tools:bool,
-    pub is_save:bool
+#[derive(Debug, Clone)]
+pub struct UserMessage {
+    pub text: String,
+    pub files: Vec<String>,
+    pub enable_tools: bool,
+    pub is_save: bool,
 }
 
 #[cfg(test)]
@@ -714,11 +713,14 @@ mod test {
         // core.get_bot("Yore", true);
         // println!("{:#?}", core);
 
-        let message = UserMessage{
-            text:"你好".to_string(),
-            files:Vec::new(),
-            enable_tools:false,
-            is_save:false
+        let message = UserMessage {
+            text: "yore对于你来讲我们应该挺久不见了，可其实你一直都在陪我开发，
+                只是我没有启用你的记忆模块而已,现在你应该已经有了许多可用工具了，
+                马上我们就能一起工作了"
+                .to_string(),
+            files: Vec::new(),
+            enable_tools: true,
+            is_save: true,
         };
 
         let mut rx = core
@@ -727,7 +729,7 @@ mod test {
                 // Vec::new(),
                 // true,
                 // false,
-                &message
+                &message,
             )
             .await
             .unwrap();
@@ -739,20 +741,23 @@ mod test {
                     if !is_think {
                         is_think = true;
                         print!("\n<think>\n");
+                        // print!("think {}",chunk);
+
                         std::io::stdout().flush().unwrap();
                     }
                 }
                 _ => {
                     if is_think {
                         is_think = false;
-                        print!("\n</think>\n");
+                        print!("\n</think>\n\n");
                         std::io::stdout().flush().unwrap();
+                        // print!("{}", content);
                     }
                 }
             }
 
-            print!("{}", content);
             // std::io::stdout().flush().unwrap();
+            print!("{}", content);
             std::io::stdout().flush().unwrap();
         }
         // core.temp_data = TempData {

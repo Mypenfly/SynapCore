@@ -20,8 +20,6 @@ pub(crate) struct ToolsManager {
 
 impl Tool for ToolsManager {
     fn definition(&self) -> crate::define_call::tool_define::ToolDefinition {
-        let description = "查找，加载现有的工具。用于获得工具的列表和详细定义，和加载可用工具。（建议结合用户需求和实际需要进行使用）".to_string();
-        let name = "tools_manager".to_string();
         let list: Vec<HashMap<String, String>> = self
             .enabled
             .iter()
@@ -34,13 +32,19 @@ impl Tool for ToolsManager {
             })
             .collect();
 
-        let sub_description = format!("提供search,add两个命令，现有的工具列表和简介:{:?}", list);
+        let description = format!(
+            "查找，加载现有的工具。用于获得工具的列表和详细定义，和加载可用工具。
+        （建议结合用户需求和实际需要进行使用）
+        现有的工具列表和简介:{:?}",
+            list
+        );
+        let name = "tools_manager".to_string();
         let parameters = serde_json::json!({
             "type":"object",
             "properties":{
                 "action":{
                     "type":"string",
-                    "description":sub_description
+                    "description":"提供search add ，search查找并查看完整的工具定义，add加载目标工具"
                 },
                 "query":{
                     "type":"string",

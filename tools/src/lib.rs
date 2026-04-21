@@ -243,6 +243,7 @@ impl Tools {
             .collect();
         tools.get_enabled_inner(inner_enabled);
         tools.get_outer_enable();
+        tools.active_tools.push(tools.manager.definition());
         // let list =tools.active_tools.clone() ;
 
         Ok(tools)
@@ -337,7 +338,6 @@ impl Tools {
             enabled: enabled_list,
         };
 
-        self.active_tools.push(self.manager.definition());
     }
 
     ///解析外部可用工具
@@ -365,49 +365,3 @@ impl Tools {
     }
 }
 
-mod test {
-    use std::path::PathBuf;
-
-    use docx_rs::Level;
-
-    use crate::{
-        Tools,
-        define_call::tool_call::{self, Function},
-        outer::{OuterTools, config::Outer},
-    };
-
-    #[tokio::test]
-    async fn test() {
-        let root = "/home/mypenfly/.config/synapcore";
-        // let mut tools = Tools::default();
-        let path = PathBuf::from(root);
-        let mut tools = Tools::init(&path, "Yore").unwrap();
-        // // tools = new_t;
-        // // println!("{:#?}",&list);
-
-        // // let args = "{\"query\": \"生命科学竞赛 大学生 含金量\", \"count\": 5}".to_string();
-        // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\"}".to_string() ;
-        // // let args ="{\"command\":\"ls\",\"path\":\"~/projects/rs-musicdog\",\"pattern\":\"music\",\"depth\":3,\"target_path\":\"./test/flake.lock\"}".to_string() ;
-        // let args = "{\"mode\":\"find\",\"title\":\"test\",\"content\":\"just a test for note book\",\"key_words\":\"test\"}".to_string();
-        // let args = "{\"action\":\"read\",\"list\":[\"test\",\"this is todo list\",\"need in cache dir\"],\"id\":2,\"update_state\":\"error\"}".to_string();
-        // // let args ="{\"\": 15, \"query\": \"硅基流动 SiliconFlow 商业模式 盈利模式 API聚合\", \"summary\": true}".to_string() ;
-        // let function = Function {
-        //     name: Some("todo_list".to_string()),
-        //     arguments: Some(args),
-        // };
-        // let call = tool_call::ToolCall {
-        //     index: 0,
-        //     id: Some("test".to_string()),
-        //     tool_type: Some("function".to_string()),
-        //     function,
-        // };
-        // let response = tools.call(call).await.unwrap();
-        // println!("{}", response);
-        println!("{:#?}", tools);
-        //
-        // let outers =vec![Outer::default(),Outer::default()];
-
-        // let last = tools.get_last_note();
-        // println!("last:{}", last);
-    }
-}
