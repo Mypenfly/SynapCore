@@ -6,7 +6,8 @@ members = [
  "src-flutter",
   #库文件 lib
   "core",
-  "tools"
+  "tools",
+  "provider"
 ]
 
 [workspace.package]

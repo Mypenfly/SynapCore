@@ -196,7 +196,7 @@ fn extract_text(path: &PathBuf) -> ExtractResult<String> {
 }
 
 #[derive(Debug)]
-pub(crate) struct ExtractRes {
+pub struct ExtractRes {
     path: PathBuf,
     content: String,
 }

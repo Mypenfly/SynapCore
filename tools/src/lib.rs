@@ -25,7 +25,7 @@ pub mod define_call;
 pub mod error;
 mod executer;
 mod fetch_url;
-mod files_extract;
+pub mod files_extract;
 mod files_system;
 mod files_write;
 mod note_book;

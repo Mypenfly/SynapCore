@@ -1,4 +1,4 @@
-use std::{io::Read, path::PathBuf, time::SystemTime};
+use std::{path::PathBuf, time::SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -187,6 +187,7 @@ impl NoteBook {
         let mut lastest: Option<PathBuf> = None;
         let mut lastest_time: Option<SystemTime> = None;
 
+        let mut titles = String::new();
         for entry in entries {
             let entry = match entry {
                 Ok(e) => e,
@@ -194,7 +195,10 @@ impl NoteBook {
             };
 
             let path = entry.path();
-            println!("path:{}", path.display());
+            titles.push_str(&format!(
+                "\t{}",
+                path.file_name().unwrap_or_default().to_str()?
+            ));
 
             if !path.is_file() {
                 continue;
@@ -217,7 +221,8 @@ impl NoteBook {
         }
 
         let title = lastest?.file_stem()?.to_str()?.to_string();
-        let content = self.read(&title).ok()?;
+        let mut content = self.read(&title).ok()?;
+        content.push_str(&format!("\nall notes : {}", titles));
         Some(content)
     }
 }

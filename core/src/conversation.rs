@@ -47,5 +47,5 @@ impl Conversation {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct TempData {
     pub text: String,
-    pub files: Vec<PathBuf>,
+    pub files: Vec<String>,
 }

@@ -168,7 +168,7 @@ impl LLMClient {
         );
         body_map.insert("tool_choices".to_string(), json!("auto"));
         body_map.insert("top_p".to_string(), json!(self.postbody.params.top_p));
-        // body_map.insert("enable_thinking".to_string(), json!(self.postbody.params.enable_thinking));
+        body_map.insert("enable_thinking".to_string(), json!(self.postbody.params.enable_thinking));
         body_map
     }
     ///流式响应

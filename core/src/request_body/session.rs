@@ -37,10 +37,6 @@ impl Session {
             self.messenge[position] = messenge;
         }
     }
-    ///提取消息
-    pub fn get_messenges(&self) -> Vec<&Messenge> {
-        self.messenge.iter().collect()
-    }
     ///压缩对话，从第一项开始是避免将系统提示词给覆盖了，应该能减少tokens
     pub fn compression(&mut self, from:usize,to: usize) -> Vec<Messenge> {
         self.messenge.drain(from..to).collect()

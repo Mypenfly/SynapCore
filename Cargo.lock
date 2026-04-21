@@ -1836,6 +1836,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "provider"
+version = "0.1.0"
+
+[[package]]
 name = "pxfm"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2565,6 +2569,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "shellexpand",
  "sqlite-vec",
  "thiserror 2.0.18",
  "tokio",

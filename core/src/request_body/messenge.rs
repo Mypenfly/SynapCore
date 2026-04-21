@@ -87,7 +87,7 @@ impl Messenge {
         msg
     }
     //添加图片
-    pub fn add_imge(&mut self, path: &str) -> Result<(), std::io::Error> {
+    fn add_imge(&mut self, path: &str) -> Result<(), std::io::Error> {
         let bytes = fs::read(path)?;
         let base = STANDARD.encode(&bytes);
 
@@ -107,39 +107,91 @@ impl Messenge {
         Ok(())
     }
 
-    pub async  fn add_mem(&mut self,store:&MemoryStore,config:&MemoryConfig,text:&str)->Result<(),String> {
-        let query =match store.embedding_client.embed(text).await{
-            Ok(q) => q,
-            Err(e) => return Err(e.to_string())
+    ///添加文件
+    pub(crate) fn add_files(&mut self, files: &Vec<String>) -> Result<(), std::io::Error> {
+        use shellexpand;
+        use std::path::PathBuf;
+        use tools::files_extract::extract;
+
+        const IMAGE_EXT: &[&str] = &["png", "jpg", "jpeg", "gif", "svg"];
+
+        let mut other = Vec::new();
+
+        //优先处理图片
+        for file in files {
+            let cow_path = shellexpand::tilde(file);
+            let path = PathBuf::from(cow_path.as_ref());
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("txt");
+            if IMAGE_EXT.contains(&ext) {
+                let _ =self.add_imge(&file.to_string());
+            } else {
+                other.push(file.to_string());
+            }
+        }
+
+        let content = match extract(&other) {
+            Ok(list) => {
+                let mut sub_content = String::new();
+                for res in list {
+                    sub_content.push_str(&res.to_string());
+                }
+                sub_content
+            }
+            Err(e) => format!("ERR :{}", e),
         };
-        let mems =match store.search(&query, config){
+
+        let con =Content{
+            content_type:"text".to_string(),
+            text:Some(format!(
+            "(system :以下是用户的提供的文件内容,如果只有一行 ERR:... 说明用户上传失败了)\n{}\n",
+            content
+        )),image_url:None
+    };
+
+        self.content.push(con);
+
+        Ok(())
+    }
+
+    pub async fn add_mem(
+        &mut self,
+        store: &MemoryStore,
+        config: &MemoryConfig,
+        text: &str,
+    ) -> Result<(), String> {
+        let query = match store.embedding_client.embed(text).await {
+            Ok(q) => q,
+            Err(e) => return Err(e.to_string()),
+        };
+        let mems = match store.search(&query, config) {
             Ok(m) => m,
-            Err(e) => return Err(e.to_string())
+            Err(e) => return Err(e.to_string()),
         };
 
         if mems.is_empty() {
             return Ok(());
         }
-        let mut init_content = String::new() ;
+        let mut init_content = String::new();
 
         init_content.push_str("以下是你**记忆**的检索有关或者重要的记忆，请你参考：\n");
 
         for mem in mems {
-            let s = format!("创建时间：{},有关性：{},内容：{}\n",mem.memory.created_time,mem.final_score,mem.memory.content);
+            let s = format!(
+                "创建时间：{},有关性：{},内容：{}\n",
+                mem.memory.created_time, mem.final_score, mem.memory.content
+            );
             init_content.push_str(&s);
         }
 
-        let content = Content{
-            content_type:"text".to_string(),
-            text:Some(init_content),
-            image_url:None
+        let content = Content {
+            content_type: "text".to_string(),
+            text: Some(init_content),
+            image_url: None,
         };
 
         self.content.push(content);
 
         Ok(())
-        
-        
     }
 
     ///转化成请求体格式

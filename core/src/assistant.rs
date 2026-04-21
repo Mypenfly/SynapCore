@@ -129,6 +129,10 @@ impl Assistant {
 
             let mut messenge = Messenge::user(message.clone());
 
+            if !data.files.is_empty() {
+               let _ = messenge.add_files(&data.files);
+            }
+
             if let Some(m) = mem_config
                 && self.store.is_some()
             {
@@ -150,6 +154,7 @@ impl Assistant {
                         error: e,
                     })?;
             }
+
 
             self.llm.postbody.session.add_messenge(messenge);
         }

@@ -120,13 +120,10 @@ impl Core {
     ///任务派发
     pub async fn task(
         &mut self,
-        text: &str,
-        files: Vec<&str>,
-        enable_tools: bool,
-        is_save: bool,
+        message:&UserMessage,
     ) -> CoreResult<tokio::sync::mpsc::Receiver<BotResponse>> {
-        self.temp_data.text = text.to_string();
-        self.temp_data.files = files.iter().map(PathBuf::from).collect();
+        self.temp_data.text = message.text.to_string();
+        self.temp_data.files = message.files.clone();
 
         let leader = self.config.agent.leader.character.clone();
 
@@ -135,8 +132,35 @@ impl Core {
 
         self.events_tx = Some(event_tx);
 
-        let mut bot = self.get_bot(&leader, enable_tools)?;
-        self.bot(&mut bot, is_save).await?;
+        let mut bot = self.get_bot(&leader, message.enable_tools)?;
+        self.bot(&mut bot, message.is_save).await?;
+
+        let core = self.clone();
+        tokio::spawn(async move {
+            // let mut core = Core::init().unwrap();
+            // core.temp_data = data;
+            let _ = core.event_loop(event_rx, out_tx, bot).await;
+        });
+
+        Ok(out_rx)
+    }
+    ///一般交流
+    pub async fn chat(
+        &mut self,
+        character: &str,
+        message:&UserMessage,
+    ) -> CoreResult<tokio::sync::mpsc::Receiver<BotResponse>> {
+        self.temp_data.text = message.text.to_string();
+        self.temp_data.files = message.files.clone();
+
+
+        let (event_tx, event_rx) = tokio::sync::mpsc::channel::<CoreEvent>(1024);
+        let (out_tx, out_rx) = tokio::sync::mpsc::channel::<BotResponse>(1024);
+
+        self.events_tx = Some(event_tx);
+
+        let mut bot = self.get_bot(character, message.enable_tools)?;
+        self.bot(&mut bot, message.is_save).await?;
 
         let core = self.clone();
         tokio::spawn(async move {
@@ -267,6 +291,10 @@ impl Core {
             bot.llm.postbody.tools = Some(self.tool.get_active());
             // println!("\ntools:{:#?}\n",&bot.llm.postbody.tools)
         }
+        //笔记注入
+        let note = self.tool.get_last_note();
+        bot.note_into(note);
+        
         Ok(bot)
     }
 
@@ -657,12 +685,20 @@ impl Display for BotResponse {
     }
 }
 
+#[derive(Debug,Clone)]
+pub struct UserMessage{
+    pub text:String,
+    pub files:Vec<String>,
+    pub enable_tools:bool,
+    pub is_save:bool
+}
+
 #[cfg(test)]
 mod test {
 
     use std::io::Write;
 
-    use crate::{BotResponse, Core};
+    use crate::{BotResponse, Core, UserMessage};
 
     #[tokio::test]
     async fn test() {
@@ -673,17 +709,25 @@ mod test {
                 return;
             }
         };
-        core.config.agent.leader.agent = "deepseek".to_string();
+        core.config.agent.leader.agent = "glm-5.1".to_string();
         // let mut core_2 = Core::init().unwrap();
         // core.get_bot("Yore", true);
         // println!("{:#?}", core);
 
+        let message = UserMessage{
+            text:"你好".to_string(),
+            files:Vec::new(),
+            enable_tools:false,
+            is_save:false
+        };
+
         let mut rx = core
             .task(
-                "yore,请你尝试使用todo_list这个工具，应该可以了",
-                Vec::new(),
-                true,
-                false,
+                // "yore,请你尝试使用todo_list这个工具，应该可以了",
+                // Vec::new(),
+                // true,
+                // false,
+                &message
             )
             .await
             .unwrap();
