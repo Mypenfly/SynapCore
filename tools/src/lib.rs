@@ -262,6 +262,9 @@ impl Tools {
     }
     ///路径确认
     fn confirm_path(path: &Path) -> Result<(), ToolErr> {
+        let path_cow = shellexpand::tilde(path.to_str().unwrap_or("./.synapcore"));
+        let path = PathBuf::from(path_cow.as_ref());
+
         if path.exists() {
             return Ok(());
         }
@@ -272,7 +275,7 @@ impl Tools {
         let tools = Tools::default();
         let content = toml::to_string_pretty(&tools).map_err(ToolErr::TomlError)?;
 
-        fs::File::create_new(path).map_err(ToolErr::ReadConfigError)?;
+        fs::File::create_new(&path).map_err(ToolErr::ReadConfigError)?;
 
         fs::write(path, content).map_err(ToolErr::ReadConfigError)?;
 
@@ -378,32 +381,5 @@ impl Tools {
     }
     pub fn get_active(&self) -> Vec<ToolDefinition> {
         self.active_tools.clone()
-    }
-}
-
-mod test{
-    use std::path::{Path, PathBuf};
-
-    use crate::{Tools, define_call::tool_call::{self, ToolCall}};
-
-    #[tokio::test]
-    async fn test() {
-        let root =PathBuf::from("~/.config/synapcore") ;
-        let mut tools = Tools::init(&root, "Yore").unwrap();
-        let args = "{\"action\":\"remove\",\"path\":\"./test.md\",\"line\":1,\"end_line\":4,
-            \"content\":\"line 1 test \\n\\tline 2 cargo hello\\n\\t line 3 synapcore\"}".to_string();
-
-        let name = Some("files_write".to_string());
-        let function = tool_call::Function { name,
-             arguments: Some(args) };
-        let call = ToolCall{
-            index:0,
-            id:None,
-            tool_type:Some("function".to_string()),
-            function
-        };
-
-        let res = tools.call(call).await.unwrap();
-        println!("{}",res)
     }
 }

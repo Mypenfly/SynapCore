@@ -1,4 +1,0 @@
-Line 1: Hello World
-Line 2: This is a test
-Line 3: Original content
-Line 4: Fourth line

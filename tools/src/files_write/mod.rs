@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     fs,
     path::{Path, PathBuf},
 };
