@@ -1,0 +1,45 @@
+sandbox_path = "/home/mypenfly/projects/synapcore/tools"
+sandbox_dyn = true
+
+[[inner]]
+name = "files_extract"
+enable = true
+
+[[inner]]
+name = "files_write"
+enable = true
+
+[[inner]]
+name = "web_search"
+enable = true
+
+[inner.params]
+base_url = "BASE URL FOR WEB SEARCH"
+api_key = "YOUR API KEY FOR WEB SEARCH"
+
+[[inner]]
+name = "files_system"
+enable = true
+
+[[inner]]
+name = "fetch_url"
+enable = true
+
+[[inner]]
+name = "note_book"
+enable = true
+
+[[inner]]
+name = "timer"
+enable = true
+
+[[outer]]
+name = "TOOL NAME"
+description = "TOOL DESCRIPTION"
+enable = true
+exec = ["YOUR EXEC COMMADN"]
+required = []
+
+[outer.parameters."Paramter name"]
+type = "string"
+description = "YOUR PARAMTERS DESCRIPTION"
