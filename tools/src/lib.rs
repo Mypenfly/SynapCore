@@ -31,6 +31,7 @@ mod files_write;
 mod note_book;
 mod outer;
 mod search_tools;
+mod skills_book;
 mod timer;
 mod todo_list;
 pub mod tool_response;
@@ -120,7 +121,13 @@ impl Default for Tools {
             params: None,
         };
 
-        let inner = vec![extract, write, web, sys, fetch, note, timer];
+        let skills_book = Inner {
+            name: "skills_book".to_string(),
+            enable: true,
+            params: None,
+        };
+
+        let inner = vec![extract, write, web, sys, fetch, note, timer, skills_book];
         let outer = vec![Outer::default()];
 
         Self {
@@ -217,6 +224,11 @@ impl Tools {
                 use timer::TimerTool;
                 let timer_tool = TimerTool;
                 timer_tool.execute(&tool.function).await
+            }
+            "skills_book" => {
+                use skills_book::SkillsBook;
+                let skills_book = SkillsBook;
+                skills_book.execute(&tool.function).await
             }
             _ => {
                 if self.outer.is_empty() {
@@ -354,6 +366,11 @@ impl Tools {
             let description = timer_tool.definition();
             enabled_list.push(description);
         }
+        if list.contains(&"skills_book") {
+            let skills_book = skills_book::SkillsBook;
+            let description = skills_book.definition();
+            enabled_list.push(description);
+        }
         self.manager = ToolsManager {
             enabled: enabled_list,
         };
@@ -378,6 +395,15 @@ impl Tools {
         let mut note = note_book::NoteBook::new();
         note.character = self.character.clone();
         note.get_last().unwrap_or_default()
+    }
+    ///获取skills列表
+    pub fn get_skills_list(&self) -> String {
+        let book = skills_book::SkillsBook;
+        let list = book.get_skills();
+        format!(
+            "当前收录的skills :{:?}\n(对于大规模行动，复杂任务时应该优先参考skills_book)",
+            list
+        )
     }
     pub fn get_active(&self) -> Vec<ToolDefinition> {
         self.active_tools.clone()

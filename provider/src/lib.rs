@@ -6,6 +6,7 @@ use synapcore_core::{Core, CoreResult};
 pub use notify::SystemNotify;
 pub use synapcore_core::SendMode;
 pub use timer::{Timer, TimerErr, TimerNotification, TimerStore};
+mod auto_loop;
 
 use timer::TimerLoop;
 use tokio::sync::{mpsc, watch};
