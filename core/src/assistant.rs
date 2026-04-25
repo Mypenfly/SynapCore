@@ -185,12 +185,15 @@ impl Assistant {
     ///last note注入
     pub fn note_into(&mut self, note: String) {
         let messenge = Messenge::system(format!("这是你最新的一篇note:\n{}", note));
-        self.llm.postbody.session.add_into(messenge, 2);
+        // println!("messenge:{:#?}",serde_json::to_string_pretty(&messenge));
+        self.llm.postbody.session.add_into(messenge, 1);
+        // println!("postdody:{:#?}",serde_json::to_string_pretty(&self.llm.postbody.session));
     }
     ///skills_list注入
     pub(crate) fn skills_list_into(&mut self,skills:String) {
         let messenge =Messenge::system(skills) ;
-        self.llm.postbody.session.add_into(messenge, 1);
+        // println!("messenge:{:#?}",serde_json::to_string_pretty(&messenge));
+        self.llm.postbody.session.add_into(messenge, 2);
     }
 }
 

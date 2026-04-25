@@ -110,6 +110,8 @@ pub struct NormalConfig {
     pub mem_prompt: PathBuf,
     ///缓存数量
     pub cache_num: usize,
+    ///AutoLoop执行间隔（分钟）
+    pub auto_loop_gap: usize,
 }
 
 impl Default for NormalConfig {
@@ -126,6 +128,7 @@ impl Default for NormalConfig {
             store_num: 50,
             mem_prompt,
             cache_num: 50,
+            auto_loop_gap: 300,
         }
     }
 }

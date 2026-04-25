@@ -114,7 +114,6 @@ impl LLMClient {
 
         let body = self.rebuild_body();
 
-        // println!("body:{}", serde_json::to_string_pretty(&body).unwrap());
 
         let response = self
             .client
@@ -433,7 +432,7 @@ impl LLMClient {
         if !self.postbody.session.messenge.is_empty() {
             self.postbody.session.messenge[0] = messenge;
         } else {
-            self.postbody.session.messenge.push_back(messenge);
+            self.postbody.session.messenge.push(messenge);
         }
     }
 }

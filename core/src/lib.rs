@@ -122,7 +122,10 @@ impl Core {
         &mut self,
         message: &UserMessage,
     ) -> CoreResult<tokio::sync::mpsc::Receiver<BotResponse>> {
-        self.temp_data.text = message.text.to_string();
+        self.temp_data.text = format!(
+            "(这是一个关键的长期任务，建议按照任务类型优先读取有用skill并严格参考),一下是任务要求:\n{}\n推荐使用工具todo_list,skills_book",
+            message.text
+        );
         self.temp_data.files = message.files.clone();
 
         let leader = self.config.agent.leader.character.clone();
@@ -282,13 +285,22 @@ impl Core {
             bot.open_store(&self.api_json, &embed_des)?;
         }
 
+        //工具激活是脱离工具启用判断的
+        let tools =
+            Tools::init(&self.config.normal.sc_root, character).map_err(CoreErr::ToolError)?;
+        self.tool = tools;
+
         if enable_tools {
-            let tools =
-                Tools::init(&self.config.normal.sc_root, character).map_err(CoreErr::ToolError)?;
-            self.tool = tools;
             // bot.llm.postbody.tools = Some(self.tool);
             bot.llm.postbody.tools = Some(self.tool.get_active());
+            self.temp_data
+                .text
+                .push_str("\n（system hint :用户已经开放了工具调用权限，请合理使用）\n");
             // println!("\ntools:{:#?}\n",&bot.llm.postbody.tools)
+        } else {
+            self.temp_data
+                .text
+                .push_str("\n（system hint :请不要尝试调用工具，用户没有开放工具权限）\n");
         }
         //skills注入
         if is_leader {
@@ -298,6 +310,7 @@ impl Core {
 
         //笔记注入
         let note = self.tool.get_last_note();
+        // println!("Note:{}", &note);
         bot.note_into(note);
 
         Ok(bot)
@@ -393,7 +406,8 @@ impl Core {
                     character,
                     raw_content,
                 } => {
-                    self.event_mem(&character, &raw_content).await?;
+                    let number = self.config.normal.store_num;
+                    self.event_mem(&character, &raw_content, number).await?;
                     let _ = out_tx.send(BotResponse::Store { character }).await;
                     bot.stop_ok = true;
                     // break;
@@ -594,8 +608,8 @@ impl Core {
     }
 
     ///记忆保存核心
-    async fn event_mem(&mut self, character: &str, content: &str) -> CoreResult<()> {
-        let number = self.config.normal.store_num;
+    async fn event_mem(&mut self, character: &str, content: &str, number: usize) -> CoreResult<()> {
+        // let number = self.config.normal.store_num;
         let mut bot = self.get_bot(character, false)?;
 
         // let (content, _) = LLMClient::remove_content(raw_content, "think");
@@ -614,7 +628,7 @@ impl Core {
             // println!("{}",mem);
         }
         //填充回对话
-        let _ = bot.llm.postbody.session.compression(2, number);
+        let _ = bot.llm.postbody.session.compression(3, number);
         let messenge = Messenge::user(format!("(以下是前面部分对话的记忆\n:{})", &content));
         bot.llm.postbody.session.add_messenge(messenge);
 
@@ -637,6 +651,14 @@ impl Core {
         let _ = event_sender.send(CoreEvent::Finshed).await;
 
         Ok(())
+    }
+
+    ///退出操作
+    pub fn exit(&self) -> Result<(), CoreErr> {
+        self.tool
+            .exit(&self.config.normal.sc_root)
+            .map_err(CoreErr::ToolError)?;
+        self.config.save()
     }
 }
 

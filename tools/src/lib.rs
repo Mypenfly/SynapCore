@@ -251,6 +251,8 @@ impl Tools {
         let path = root.join("tools").join("tools.toml");
         Tools::confirm_path(&path)?;
         let mut tools = Tools::loading_tools(&path)?;
+
+        //角色赋予
         tools.character = character.to_string();
         //处理一下动态的沙盒路径
         if tools.sandbox_dyn {
@@ -394,7 +396,7 @@ impl Tools {
     pub fn get_last_note(&self) -> String {
         let mut note = note_book::NoteBook::new();
         note.character = self.character.clone();
-        note.get_last().unwrap_or_default()
+        note.get_last().unwrap_or("现在没有notes".to_string())
     }
     ///获取skills列表
     pub fn get_skills_list(&self) -> String {
@@ -407,5 +409,13 @@ impl Tools {
     }
     pub fn get_active(&self) -> Vec<ToolDefinition> {
         self.active_tools.clone()
+    }
+
+    ///退出
+    pub fn exit(&self, root: &Path) -> Result<(), ToolErr> {
+        let path = root.join("tools").join("tools.toml");
+        Tools::confirm_path(&path)?;
+        let content = toml::to_string_pretty(self).map_err(ToolErr::TomlError)?;
+        std::fs::write(path, content).map_err(ToolErr::ReadConfigError)
     }
 }

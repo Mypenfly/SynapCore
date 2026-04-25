@@ -204,6 +204,7 @@ impl NoteBook {
                 continue;
             }
 
+            // println!("文件:{}",path.display());
             let metadata = match entry.metadata() {
                 Ok(m) => m,
                 Err(_) => continue,
