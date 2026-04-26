@@ -185,6 +185,7 @@ impl LLMClient {
         //留出之后解析用
         let mut content_buf = String::new();
         let mut reasoning_buf = String::new();
+        //工具积累
         let mut tool_acc: HashMap<usize, ToolCallAcc> = HashMap::new();
 
         //标记思考
@@ -232,6 +233,7 @@ impl LLMClient {
                     continue;
                 }
 
+                //解析chunk
                 let chunk: StreamChunk =
                     serde_json::from_str(json_str).map_err(|e| APIErr::Json {
                         chunk: json_str.to_string(),
@@ -244,6 +246,7 @@ impl LLMClient {
                 };
 
                 if let Some(delta) = &choice.delta {
+                    //思考部分
                     if let Some(reasoning) = &delta.reasoning_content {
                         // println!("{}",&reasoning);
                         if !in_reasoning {
@@ -262,6 +265,7 @@ impl LLMClient {
                         }
                     }
 
+                    //正文内容
                     if let Some(content) = &delta.content {
                         if in_reasoning {
                             in_reasoning = false;
@@ -280,18 +284,22 @@ impl LLMClient {
                             content_buf.push_str(content);
                         }
                     }
-
+                    //工具调用解析
                     if let Some(tool_calls) = &delta.tool_calls {
                         for tc in tool_calls {
                             let idx = tc.index;
                             let acc = tool_acc.entry(idx).or_default();
-
+                            //工具id
                             if let Some(id) = &tc.id {
                                 acc.id = id.clone();
                             }
+                            //工具name,发送preparing
                             if let Some(name) = &tc.function.name {
                                 acc.name = name.clone();
+                                tx.send(LLMResponse::ToolPreparing { name: name.to_string() })
+                                    .map_err(APIErr::SendError)?;
                             }
+                            //工具参数，等待积累，tool_call结束时发送call
                             if let Some(args) = &tc.function.arguments {
                                 acc.arguments.push_str(args);
                             }
@@ -337,7 +345,7 @@ impl LLMClient {
                                 })
                                 .collect();
 
-                            tx.send(LLMResponse::Tool { tools })
+                            tx.send(LLMResponse::ToolCall { tools })
                                 .map_err(APIErr::SendError)?;
                         }
                         _ => break,
@@ -483,18 +491,3 @@ struct Delta {
     tool_calls: Option<Vec<ToolCall>>,
 }
 
-// mod test{
-//     use super::StreamChunk;
-//     #[test]
-//     fn test() {
-//         let json1 = r#"{"id":"019d3437924b80033d9d13a907fff991","object":"chat.completion.chunk","created":1774697550,"model":"Pro/moonshotai/Kimi-K2.5","choices":[{"index":0,"delta":{"content":null,"reasoning_content":null,"role":"assistant","tool_calls":[{"index":0,"id":"functions.files_extract:0","type":"function","function":{"name":"files_extract","arguments":""}}]},"finish_reason":null}],"system_fingerprint":"","usage":{"prompt_tokens":12795,"completion_tokens":46,"total_tokens":12841,"completion_tokens_details":{"reasoning_tokens":19},"prompt_tokens_details":{"cached_tokens":11712},"prompt_cache_hit_tokens":11712,"prompt_cache_miss_tokens":1083}}"#;
-
-// let json2 = r#"{"id":"019d3437924b80033d9d13a907fff991","object":"chat.completion.chunk","created":1774697550,"model":"Pro/moonshotai/Kimi-K2.5","choices":[{"index":0,"delta":{"content":null,"reasoning_content":null,"role":"assistant","tool_calls":[{"index":0,"id":null,"type":null,"function":{"arguments":"{\""}}]},"finish_reason":null}],"system_fingerprint":"","usage":{"prompt_tokens":12795,"completion_tokens":48,"total_tokens":12843,"completion_tokens_details":{"reasoning_tokens":19},"prompt_tokens_details":{"cached_tokens":11712},"prompt_cache_hit_tokens":11712,"prompt_cache_miss_tokens":1083}}"#;
-
-// let chunk1: StreamChunk = serde_json::from_str(json1).unwrap();
-// let chunk2: StreamChunk = serde_json::from_str(json2).unwrap();
-
-// println!("chunk1: {:?}", chunk1.choices[0].delta.as_ref().unwrap().tool_calls);
-// println!("chunk2: {:?}", chunk2.choices[0].delta.as_ref().unwrap().tool_calls);
-//     }
-// }

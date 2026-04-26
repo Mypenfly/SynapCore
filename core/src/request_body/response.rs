@@ -11,7 +11,10 @@ pub enum LLMResponse {
     Content {
         chunk: String,
     },
-    Tool {
+    ToolPreparing{
+        name:String,
+    },
+    ToolCall {
         tools: Vec<ToolCall>,
     },
     Error {

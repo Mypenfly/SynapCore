@@ -33,7 +33,11 @@ enum CoreEvent {
         content: String,
         is_save: bool,
     },
-    Tools {
+    ToolPreparing {
+        character: String,
+        name: String,
+    },
+    ToolCalls {
         raw_content: String,
         character: String,
         tools: Vec<ToolCall>,
@@ -216,9 +220,9 @@ impl Core {
                             })
                             .await;
                     }
-                    LLMResponse::Tool { tools } => {
+                    LLMResponse::ToolCall { tools } => {
                         let _ = event_sender
-                            .send(CoreEvent::Tools {
+                            .send(CoreEvent::ToolCalls {
                                 raw_content: full_content.clone(),
                                 character: event_ch.clone(),
                                 tools,
@@ -226,6 +230,14 @@ impl Core {
                             })
                             .await;
                         is_complete = true;
+                    }
+                    LLMResponse::ToolPreparing { name } => {
+                        let _ = event_sender
+                            .send(CoreEvent::ToolPreparing {
+                                character: character.clone(),
+                                name,
+                            })
+                            .await;
                     }
                 }
             }
@@ -358,7 +370,15 @@ impl Core {
                         break;
                     }
                 }
-                CoreEvent::Tools {
+                CoreEvent::ToolPreparing { character, name } => {
+                    let _ = out_tx
+                        .send(BotResponse::ToolPreparing {
+                            charater: character,
+                            name,
+                        })
+                        .await;
+                }
+                CoreEvent::ToolCalls {
                     raw_content,
                     character,
                     tools,
@@ -434,7 +454,7 @@ impl Core {
         // println!("\ntool-content:{}\n", &content);
         // bot.tool(content);
         if let Ok(content) = response {
-            println!("tool response:{}", &content);
+            // println!("tool response:{}", &content);
             bot.tool(content.to_string());
         }
         bot.llm.postbody.tools = Some(self.tool.get_active());
@@ -670,6 +690,10 @@ pub enum BotResponse {
     Content {
         chunk: String,
     },
+    ToolPreparing {
+        charater: String,
+        name: String,
+    },
     ToolCall {
         character: String,
         name: String,
@@ -692,6 +716,9 @@ impl Display for BotResponse {
         match self {
             Self::Reasoning { chunk } => write!(f, "{}", chunk),
             Self::Content { chunk } => write!(f, "{}", chunk),
+            Self::ToolPreparing { charater, name } => {
+                writeln!(f, "{} preparing tool : {}", charater, name)
+            }
             Self::ToolCall {
                 character,
                 name,

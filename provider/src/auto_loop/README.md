@@ -6,15 +6,35 @@
 
 ## 功能概述
 
-| 功能 | 描述 | 执行频率 |
-|------|------|----------|
-| **AutoStudy** | 自动学习模式，使用工具学习用户对话和项目内容 | 每次循环执行 |
-| **AutoReflect** | 自我反思，生成用户画像和经验总结文档 | 每次循环执行 |
-| **AutoClear** | 自动清理 note_book 和 skills_book 内容 | 每次循环执行 |
+| 功能 | 描述 |
+|------|------|
+| **AutoStudy** | 自动学习模式，使用工具学习用户对话和项目内容 |
+| **AutoReflect** | 自我反思，生成用户画像和经验总结文档 |
+| **AutoClear** | 自动清理 note_book 和 skills_book 内容 |
+
+## 架构
+
+分为两个结构体，分离调度与执行职责：
+
+```
+AutoLoopManager (mod.rs)          AutoLoop (auto.rs)
+┌──────────────────────┐          ┌──────────────────────┐
+│ time_count: usize    │ 管理计时  │                      │
+│ gap: usize           │ ◄────────│ core: Core           │
+│ loop_locked: AtomicBool│        │                      │
+│                      │          │ auto_study()         │
+│ run_once(core) ──────┼────────►│ auto_reflect()       │
+│ tick()               │          │ auto_clear()         │
+│ exit()               │          │                      │
+└──────────────────────┘          └──────────────────────┘
+```
+
+- **AutoLoopManager**: 调度器，管理计时累计和并发锁
+- **AutoLoop**: 执行器，持有独立 Core 实例，实现具体逻辑
 
 ## 配置参数
 
-- **auto_loop_gap**: 执行间隔（分钟），默认 300 分钟
+- **auto_loop_gap**: 执行间隔（分钟），默认 300 分钟。设为 `0` 表示禁用。
 - 配置位置: `~/.config/synapcore/synapcore.toml` 的 `[normal]` 部分
 
 ```toml
@@ -36,14 +56,23 @@ pub struct AutoLoopCache {
 }
 ```
 
-### AutoLoop
-主结构体，持有独立的 Core 实例
+### AutoLoopManager
+调度器结构体，`pub(crate)` 可见
 
 ```rust
-pub struct AutoLoop {
-    core: Core,        // 独立的 Core 实例
-    time_count: usize, // 当前计时器
-    gap: usize,        // 执行间隔（从配置读取）
+pub(crate) struct AutoLoopManager {
+    time_count: usize,                     // 当前累计计时（分钟）
+    gap: usize,                            // 执行间隔
+    loop_locked: Arc<AtomicBool>,          // 防止并发执行锁
+}
+```
+
+### AutoLoop
+执行器结构体，`pub(super)` 可见
+
+```rust
+pub(super) struct AutoLoop {
+    core: Core,
 }
 ```
 
@@ -51,48 +80,60 @@ pub struct AutoLoop {
 
 ## 核心方法
 
-### 1. 初始化
+### AutoLoopManager 方法
 
+| 方法 | 说明 |
+|------|------|
+| `new(gap) -> AutoLoopResult<Self>` | 从缓存加载计时，初始化并发锁为 false |
+| `tick(elapsed_minutes) -> bool` | 累计时间，当 `time_count` 是 `gap` 的倍数时返回 true |
+| `run_once(core) -> AutoLoopResult<()>` | 在 `tokio::spawn` 后台任务中执行 auto_study → auto_reflect → auto_clear |
+| `exit() -> AutoLoopResult<()>` | 保存当前 time_count 到 cache.json |
+
+**tick 逻辑**：
 ```rust
-// 从配置创建 AutoLoop 实例
-let auto_loop = AutoLoop::new(core)?;
-
-// 自动加载缓存
-// - 从 ~/.cache/synapcore_cache/cache.json 读取累计时间
-// - 读取 core.config.normal.auto_loop_gap 配置
+pub async fn tick(&mut self, elapsed_minutes: usize) -> bool {
+    if self.gap == 0 {
+        return false;  // gap=0 时禁用
+    }
+    self.time_count += elapsed_minutes;
+    if self.time_count >= self.gap {
+        self.time_count -= self.gap;  // 减掉 gap，保留剩余
+        return true;
+    }
+    false
+}
 ```
 
-### 2. 计时器管理
-
+**run_once 并发控制**：
 ```rust
-// 每分钟调用一次，累计时间
-auto_loop.tick(elapsed_minutes).await -> bool
+pub async fn run_once(&mut self, core: &mut Core) -> AutoLoopResult<()> {
+    if self.loop_locked.load(Ordering::SeqCst) {
+        return Ok(());  // 已有循环在执行
+    }
+    self.loop_locked.store(true, Ordering::SeqCst);
 
-// 当 time_count 是 gap 的倍数时返回 true，触发执行
-// 例如：gap=300，每累计300分钟返回true
+    let locked = self.loop_locked.clone();
+
+    tokio::spawn(async move {
+        let mut auto = AutoLoop::new(core).unwrap();
+        let _ = auto.auto_study().await;
+        let _ = auto.auto_reflect().await;
+        let _ = auto.auto_clear().await;
+        locked.store(false, Ordering::SeqCst);
+    });
+
+    Ok(())
+}
 ```
 
-### 3. 执行循环
+### AutoLoop 方法
 
-```rust
-// 执行一次完整的自动循环
-auto_loop.run_once().await?;
-
-// 内部执行顺序：
-// 1. auto_study()    - 自动学习
-// 2. auto_reflect()  - 自我反思
-// 3. auto_clear()    - 自动清理
-// 4. 重置 time_count = 0，保存缓存
-```
-
-### 4. 安全退出
-
-```rust
-// 保存当前计时器状态
-auto_loop.exit()?;
-
-// 将 time_count 和当前时间戳保存到 cache.json
-```
+| 方法 | 说明 |
+|------|------|
+| `new(core) -> AutoLoopResult<Self>` | 包装一个 Core 实例 |
+| `auto_study() -> AutoLoopResult<()>` | 自动学习模式 |
+| `auto_reflect() -> AutoLoopResult<()>` | 自我反思模式 |
+| `auto_clear() -> AutoLoopResult<()>` | 自动清理模式 |
 
 ---
 
@@ -110,7 +151,7 @@ auto_loop.exit()?;
 ```
 
 **执行流程**：
-1. 使用 leader 角色的 Core 实例
+1. 使用传入的 Core 实例（leader 角色）
 2. `enable_tools = true`，允许使用所有工具
 3. `is_save = false`，不保存此次对话记录
 4. 自动注入工具调用权限提示
@@ -160,6 +201,11 @@ auto_loop.exit()?;
 - **合作顺畅度**: [顺畅, 一般, 需要改进]
 - **沟通效率**: [高效, 正常, 有待提高]
 
+## 角色构建与自我认知 (Role-Building & Self-Awareness)
+
+- [Agent 对自己的角色定位和认知]
+- [在不同场景下的角色适应策略]
+
 ## 注意事项 (Notes)
 
 1. 保持客观, 基于实际交互数据
@@ -178,7 +224,12 @@ auto_loop.exit()?;
 1. 读取现有反思文档：`~/.config/synapcore/data/{character}_reflection.md`
 2. 构造包含现有内容的提示词
 3. 调用 Core，要求输出 `<reflection>` 标签格式
-4. 提取标签内容，覆盖写入反思文档
+4. 通过正则提取标签内容，覆盖写入反思文档
+
+**关键参数**：
+```rust
+const REFLECTION_TAG: &str = "reflection";
+```
 
 **文件位置**：
 - `~/.config/synapcore/data/Yore_reflection.md` (示例)
@@ -206,23 +257,24 @@ auto_loop.exit()?;
 
 ## 错误处理
 
-### AutoLoopErr 枚举
+### AutoLoopErr 枚举（`pub(crate)`）
 
 ```rust
-pub enum AutoLoopErr {
+pub(crate) enum AutoLoopErr {
     Io(std::io::Error),           // 文件读写错误
     Serde(serde_json::Error),     // JSON 序列化错误
     Core(CoreErr),                // Core 调用错误
     Path(String),                 // 路径获取错误
     Regex(regex::Error),          // 正则表达式错误
 }
+pub(crate) type AutoLoopResult<T> = Result<T, AutoLoopErr>;
 ```
 
 ### 错误隔离策略
 
-1. **模块独立**：每个功能独立错误处理，不影响其他功能
-2. **日志记录**：错误记录到 stderr，但不中断流程
-3. **降级运行**：单个功能失败不影响整体循环
+1. **模块独立**：auto_study / auto_reflect / auto_clear 各自独立 try 处理，失败不中断后续
+2. **日志记录**：错误通过 `eprintln!` 输出到 stderr
+3. **降级运行**：单个功能失败不影响其他功能执行
 
 ---
 
@@ -234,27 +286,31 @@ pub enum AutoLoopErr {
 // 在 Provider::run() 开始时初始化
 self.auto_loop_run()?;
 
-// 内部创建独立的 Core 实例给 AutoLoop 使用
-let core_for_autoloop = Core::init()?;
-let auto_loop = AutoLoop::new(core_for_autoloop)?;
+// 内部实现
+fn auto_loop_run(&mut self) -> CoreResult<()> {
+    let gap = self.core.config.normal.auto_loop_gap;
+    if gap > 0 {
+        self.auto_loop = Some(AutoLoopManager::new(gap)?);
+    }
+    Ok(())
+}
 ```
 
 ### 主循环集成
 
 ```rust
-// 每分钟检查一次
 let mut auto_loop_interval = tokio::time::interval(Duration::from_secs(60));
 let mut auto_loop_elapsed_minutes = 0;
 
 // 在主循环的 tokio::select! 中
 _ = auto_loop_interval.tick() => {
     auto_loop_elapsed_minutes += 1;
-    
-    if let Some(al) = &mut self.auto_loop && al.tick(auto_loop_elapsed_minutes).await {
-        // 达到间隔时间，执行循环
-        let al_result = al.run_once().await;
-        if let Err(e) = al_result {
-            eprintln!("[Provider] AutoLoop执行失败: {}", e);
+    if let Some(al) = &mut self.auto_loop
+        && al.tick(auto_loop_elapsed_minutes).await
+        && let Some(core) = &mut self.core
+    {
+        if let Err(e) = al.run_once(core).await {
+            eprintln!("[Provider] auto loop error : {}", e);
         }
     }
 }
@@ -263,10 +319,8 @@ _ = auto_loop_interval.tick() => {
 ### 安全退出集成
 
 ```rust
-// 在 Provider::exit() 中
 if let Some(al) = &self.auto_loop {
-    let al_result = al.exit();
-    if let Err(e) = al_result {
+    if let Err(e) = al.exit() {
         eprintln!("[Provider] auto loop error : {}", e);
     }
 }
@@ -277,6 +331,7 @@ if let Some(al) = &self.auto_loop {
 ## 文件系统
 
 ### 缓存文件
+
 ```
 ~/.cache/synapcore_cache/cache.json
 ```
@@ -290,6 +345,7 @@ if let Some(al) = &self.auto_loop {
 ```
 
 ### 反思文档
+
 ```
 ~/.config/synapcore/data/{character}_reflection.md
 ```
@@ -328,6 +384,11 @@ if let Some(al) = &self.auto_loop {
 - **合作顺畅度**: [顺畅]
 - **沟通效率**: [高效]
 
+## 角色构建与自我认知 (Role-Building & Self-Awareness)
+
+- [Agent 对自己的角色定位和认知]
+- [在不同场景下的角色适应策略]
+
 ## 注意事项 (Notes)
 
 1. 保持客观, 基于实际交互数据
@@ -346,55 +407,46 @@ if let Some(al) = &self.auto_loop {
 
 ## 设计理念
 
-### 1. 独立 Core 实例
-- AutoLoop 使用独立的 Core 实例，避免与用户交互冲突
-- 独立的配置和会话管理
+### 1. 调度与执行分离
 
-### 2. 持久化计时
-- 解决应用启动时间不足的问题
+- `AutoLoopManager` 负责"何时运行"，管理计时、持久化、并发锁
+- `AutoLoop` 负责"运行什么"，包含具体的 AI 交互逻辑
+- `run_once(core)` 将 Core 引用传给后台 `tokio::spawn` 任务
+
+### 2. 并发安全
+
+- 通过 `AtomicBool` 锁确保同一时间只有一个 AutoLoop 任务在执行
+- 即使 tick 多次触发，也不会叠加执行
+
+### 3. 持久化计时
+
+- 解决应用重启导致计时重置的问题
 - 累计计时，确保按间隔执行
 
-### 3. 自我管理
-- Agent 自主决定学习内容和清理策略
-- 反思文档由 Agent 生成和维护
+### 4. 自我管理
 
-### 4. 错误容忍
-- 单个功能失败不影响整体
-- 详细的错误日志，便于调试
+- Agent 自主决定学习内容和清理策略
+- 反思文档由 Agent 生成和维护，包含角色构建与自我认知
+
+### 5. 错误容忍
+
+- 单个功能失败不影响整体（每个步骤独立 try）
+- 后台任务失败通过锁释放保证下次可重试
 
 ---
 
 ## 使用示例
 
-### 独立使用 AutoLoop
+### 独立使用 AutoLoop（仅内部可见，不可直接外部引用）
+
+AutoLoop 和 AutoLoopManager 均为 `pub(crate)` / `pub(super)`，不对外暴露。以下为内部使用示意：
 
 ```rust
-use synapcore_provider::auto_loop::AutoLoop;
-use synapcore_core::Core;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 创建独立的 Core 实例
-    let core = Core::init()?;
-    
-    // 创建 AutoLoop
-    let mut auto_loop = AutoLoop::new(core)?;
-    
-    // 模拟时间流逝
-    for minute in 0..600 {
-        tokio::time::sleep(Duration::from_secs(60)).await;
-        
-        if auto_loop.tick(1).await {
-            println!("达到间隔时间，执行自动循环");
-            auto_loop.run_once().await?;
-        }
-    }
-    
-    // 安全退出
-    auto_loop.exit()?;
-    
-    Ok(())
-}
+// auto_loop/mod.rs - AutoLoopManager::run_once()
+let mut auto = AutoLoop::new(core)?;
+auto.auto_study().await?;
+auto.auto_reflect().await?;
+auto.auto_clear().await?;
 ```
 
 ### 在 Provider 中使用
@@ -427,9 +479,9 @@ auto_loop_gap = 30  # 30分钟，便于测试
 auto_loop_gap = 300  # 5小时，避免频繁打扰
 ```
 
-### 调试模式
+### 禁用 AutoLoop
 ```toml
-auto_loop_gap = 0  # 禁用 AutoLoop
+auto_loop_gap = 0  # tick() 直接返回 false，永不执行
 ```
 
 ---
@@ -456,14 +508,6 @@ cat ~/.config/synapcore/data/Yore_reflection.md
 journalctl -u synapcore  # 如果配置了系统服务
 ```
 
-### 手动触发
-```rust
-// 在代码中手动执行
-auto_loop.run_once().await?;
-```
-
 ---
 
-**文档版本**: 2.0  
-**最后更新**: 2026-04-25  
-**基于代码版本**: AutoLoop 完整实现
+**基于代码版本**: AutoLoopManager + AutoLoop 分离架构（mod.rs + auto.rs）

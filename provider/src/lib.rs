@@ -10,17 +10,18 @@ pub use provider_cmd::{ProviderCommand, ProviderResponse};
 pub use synapcore_core::SendMode;
 pub use timer::{Timer, TimerErr, TimerNotification, TimerStore};
 
-use auto_loop::AutoLoop;
 use timer::TimerLoop;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 
+use crate::auto_loop::AutoLoopManager;
+
 pub struct Provider {
     core: Core,
     shutdown_tx: watch::Sender<bool>,
     timer_rx: mpsc::Receiver<TimerNotification>,
-    auto_loop: Option<AutoLoop>,
+    auto_loop: Option<AutoLoopManager>,
 }
 
 impl Provider {
@@ -76,20 +77,15 @@ impl Provider {
     }
     ///auto_loop启动
     fn auto_loop_run(&mut self) -> CoreResult<()> {
-        // 为AutoLoop创建新的Core实例（根据README.md设计）
-        let core_for_autoloop = Core::init()?;
-        let mut auto_loop = match AutoLoop::new(core_for_autoloop) {
-            Ok(al) => {
-                println!("[Provider] AutoLoop初始化成功");
-                Some(al)
-            }
+        let gap = self.core.config.normal.auto_loop_gap;
+        let auto_manager = match AutoLoopManager::new(gap) {
+            Ok(am) => Some(am),
             Err(e) => {
-                eprintln!("[Provider] AutoLoop初始化失败: {}", e);
+                eprint!("[Provider] Auto loop init failed : {}", e);
                 None
             }
         };
-
-        self.auto_loop = auto_loop.take();
+        self.auto_loop = auto_manager;
         Ok(())
     }
 
@@ -112,7 +108,9 @@ impl Provider {
     ) -> CoreResult<()> {
         // 创建shutdown接收器用于主循环
         let mut shutdown_rx_for_main = self.shutdown_tx.subscribe();
+        //启动auto_loop
         self.auto_loop_run()?;
+        // let auto_loop_manager = AutoLoopManager::new(self.core.config.normal.auto_loop_gap);
 
         // 启动Timer
         let timer_handle = self.timer_run().await?;
@@ -122,6 +120,7 @@ impl Provider {
 
         // 主循环
         let (_, mut bot_response) = mpsc::channel(1024);
+        println!("[Provider] main loop start");
         loop {
             tokio::select! {
                 // 处理命令
@@ -158,11 +157,17 @@ impl Provider {
                 // AutoLoop计时
                 _ = auto_loop_interval.tick() => {
                     auto_loop_elapsed_minutes += 1;
+                    println!("计时 + 1");
 
-                    if let Some(al) = &mut self.auto_loop && al.tick(auto_loop_elapsed_minutes).await{
-                        let al_result = al.run_once().await;
+                    // println!("auto loop : {:#?}",&self.auto_loop);
+                    if let Some(al) = &mut self.auto_loop && al.tick(auto_loop_elapsed_minutes,self.core.config.normal.auto_loop_gap).await{
+                        let result = Core::init();
+                        if let Ok(core) = result {
+                        let al_result = al.run_once(core).await;
                             if let Err(e) = al_result{
                                 eprintln!("[Provider] AutoLoop执行失败: {}", e);
+                        }}else {
+                            eprintln!("[provider] AutoLoop failed in core init : {:#?}",result);
                         }
                     }
                 }
@@ -232,47 +237,46 @@ enum LoopContinue {
     Response(tokio::sync::mpsc::Receiver<BotResponse>),
 }
 
-mod test {
-    use std::io::Write;
+// mod test {
+//     use std::io::Write;
 
-    use synapcore_core::UserMessage;
+//     use synapcore_core::UserMessage;
 
-    use crate::Provider;
+//     use crate::Provider;
 
-    #[tokio::test]
-    async fn test() {
-        let mut query = UserMessage::chat("Yore");
-        query.text = "我们的 provider 模块完全实现了，现在给你一个任务：对当前文件夹下的代码进行理解，之后对 ./README.md, ./src/auto_loop/README.md 的内容进行更新".to_string();
-        query.enable_tools = true;
-        query.is_save = true;
+//     #[tokio::test]
+//     async fn test() {
+//         let mut query = UserMessage::chat("Yore");
+//         query.text = "我们对项目的核心开法进入尾声，现在要实现一个tui界面。请你读取一下 ../tui/ 中的已有代码实现，并做一下总结，写入 ./tui.md中 ".to_string();
+//         query.enable_tools = true;
+//         query.is_save = true;
 
-        let provider = Provider::new().unwrap();
-        // let mut resp_rx = provider.send(&query).await.unwrap();
+//         let mut provider = Provider::new().unwrap();
 
-        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1024);
-        let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel(1024);
+//         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1024);
+//         let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel(1024);
 
-        tokio::spawn(async move {
-            // println!("Core {:#?}",&provider.core);
-            let _ = provider.run(cmd_rx, resp_tx).await;
-        });
+//         tokio::spawn(async move {
+//             // println!("Core {:#?}",&provider.core);
+//             let _ = provider.run(cmd_rx, resp_tx).await;
+//         });
 
-        let _ = cmd_tx
-            .send(crate::ProviderCommand::Send { message: query })
-            .await;
+//         // let _ = cmd_tx
+//         //     .send(crate::ProviderCommand::Send { message: query })
+//         //     .await;
 
-        while let Some(content) = resp_rx.recv().await {
-            match content {
-                crate::ProviderResponse::Response(res) => {
-                    print!("{}", res);
-                    std::io::stdout().flush().unwrap();
-                }
-                crate::ProviderResponse::Error(e) => {
-                    eprintln!("{}", e);
-                }
-            }
-            // print!("{}",content);
-            // std::io::stdout().flush().unwrap();
-        }
-    }
-}
+//         while let Some(content) = resp_rx.recv().await {
+//             match content {
+//                 crate::ProviderResponse::Response(res) => {
+//                     print!("{}", res);
+//                     std::io::stdout().flush().unwrap();
+//                 }
+//                 crate::ProviderResponse::Error(e) => {
+//                     eprintln!("{}", e);
+//                 }
+//             }
+//             // print!("{}",content);
+//             // std::io::stdout().flush().unwrap();
+//         }
+//     }
+// }
