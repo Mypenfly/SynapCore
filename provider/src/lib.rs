@@ -237,46 +237,46 @@ enum LoopContinue {
     Response(tokio::sync::mpsc::Receiver<BotResponse>),
 }
 
-// mod test {
-//     use std::io::Write;
+mod test {
+    use std::io::Write;
 
-//     use synapcore_core::UserMessage;
+    use synapcore_core::UserMessage;
 
-//     use crate::Provider;
+    use crate::Provider;
 
-//     #[tokio::test]
-//     async fn test() {
-//         let mut query = UserMessage::chat("Yore");
-//         query.text = "我们对项目的核心开法进入尾声，现在要实现一个tui界面。请你读取一下 ../tui/ 中的已有代码实现，并做一下总结，写入 ./tui.md中 ".to_string();
-//         query.enable_tools = true;
-//         query.is_save = true;
+    #[tokio::test]
+    async fn test() {
+        let mut query = UserMessage::chat("Yore");
+        query.text = "你好,这是测试".to_string();
+        query.enable_tools = false;
+        query.is_save = false;
 
-//         let mut provider = Provider::new().unwrap();
+        let provider = Provider::new().unwrap();
 
-//         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1024);
-//         let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel(1024);
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(1024);
+        let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel(1024);
 
-//         tokio::spawn(async move {
-//             // println!("Core {:#?}",&provider.core);
-//             let _ = provider.run(cmd_rx, resp_tx).await;
-//         });
+        tokio::spawn(async move {
+            // println!("Core {:#?}",&provider.core);
+            let _ = provider.run(cmd_rx, resp_tx).await;
+        });
 
-//         // let _ = cmd_tx
-//         //     .send(crate::ProviderCommand::Send { message: query })
-//         //     .await;
+        let _ = cmd_tx
+            .send(crate::ProviderCommand::Send { message: query })
+            .await;
 
-//         while let Some(content) = resp_rx.recv().await {
-//             match content {
-//                 crate::ProviderResponse::Response(res) => {
-//                     print!("{}", res);
-//                     std::io::stdout().flush().unwrap();
-//                 }
-//                 crate::ProviderResponse::Error(e) => {
-//                     eprintln!("{}", e);
-//                 }
-//             }
-//             // print!("{}",content);
-//             // std::io::stdout().flush().unwrap();
-//         }
-//     }
-// }
+        while let Some(content) = resp_rx.recv().await {
+            match content {
+                crate::ProviderResponse::Response(res) => {
+                    print!("{}", res);
+                    std::io::stdout().flush().unwrap();
+                }
+                crate::ProviderResponse::Error(e) => {
+                    eprintln!("{}", e);
+                }
+            }
+            // print!("{}",content);
+            // std::io::stdout().flush().unwrap();
+        }
+    }
+}

@@ -5,7 +5,7 @@ use crate::{
     config::CoreConfig,
     conversation::{Conversation, TempData},
     read_config::JsonConfig,
-    request_body::{LLMClient, messenge::Messenge, response::LLMResponse},
+    request_body::{LLMClient, Usage, messenge::Messenge, response::LLMResponse},
 };
 
 use tools::{Tools, define_call::tool_call::ToolCall};
@@ -47,6 +47,7 @@ enum CoreEvent {
         character: String,
         raw_content: String,
     },
+    Usage(Usage),
     Error {
         character: String,
         error: String,
@@ -238,6 +239,9 @@ impl Core {
                                 name,
                             })
                             .await;
+                    }
+                    LLMResponse::TokensUsage { usage } => {
+                        let _ = event_sender.send(CoreEvent::Usage(usage)).await;
                     }
                 }
             }
@@ -431,6 +435,9 @@ impl Core {
                     let _ = out_tx.send(BotResponse::Store { character }).await;
                     bot.stop_ok = true;
                     // break;
+                }
+                CoreEvent::Usage(usage) => {
+                    let _ = out_tx.send(BotResponse::Usage { usage }).await;
                 }
                 CoreEvent::Error { character, error } => {
                     // let (_, e) = LLMClient::remove_content(&error, "Error");
@@ -705,6 +712,9 @@ pub enum BotResponse {
     Store {
         character: String,
     },
+    Usage {
+        usage: Usage,
+    },
     Error {
         character: String,
         error: String,
@@ -732,6 +742,7 @@ impl Display for BotResponse {
             }
             Self::Save { character } => write!(f, "\n{}-Saved\n", character),
             Self::Store { character } => write!(f, "\n{}-Stored\n", character),
+            Self::Usage { usage } => writeln!(f, "\ntokens usage :\n {}", usage),
             Self::Error { character, error } => {
                 write!(f, "\nError-{} in character:{}\n", error, character)
             }

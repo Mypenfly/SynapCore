@@ -1,6 +1,8 @@
 // use crate::request_body::tool_call::ToolCall;
 use tools::define_call::tool_call::ToolCall;
 
+use crate::request_body::Usage;
+
 #[derive(Default, Debug, Clone)]
 pub enum LLMResponse {
     #[default]
@@ -16,6 +18,9 @@ pub enum LLMResponse {
     },
     ToolCall {
         tools: Vec<ToolCall>,
+    },
+    TokensUsage{
+        usage:Usage,
     },
     Error {
         err: String,

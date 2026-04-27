@@ -26,6 +26,7 @@ use reqwest::{Client, Response};
 use serde_json::Value;
 use std::{
     collections::HashMap,
+    fmt::Display,
     path::{Path, PathBuf},
 };
 
@@ -114,7 +115,6 @@ impl LLMClient {
 
         let body = self.rebuild_body();
 
-
         let response = self
             .client
             .post(format!("{}/chat/completions", url))
@@ -156,21 +156,22 @@ impl LLMClient {
         }
 
         body_map.insert("stream".to_string(), json!(self.postbody.streaming));
-        // body_map.insert("stream".to_string(), json!(false));
-        body_map.insert(
-            "temperature".to_string(),
-            json!(self.postbody.params.temperature),
-        );
-        body_map.insert(
-            "max_tokens".to_string(),
-            json!(self.postbody.params.max_tokens),
-        );
         body_map.insert("tool_choices".to_string(), json!("auto"));
-        body_map.insert("top_p".to_string(), json!(self.postbody.params.top_p));
-        body_map.insert(
-            "enable_thinking".to_string(),
-            json!(self.postbody.params.enable_thinking),
-        );
+        // body_map.insert("stream".to_string(), json!(false));
+        //处理默认参数
+        if let Some(params) = &self.postbody.params {
+            body_map.insert("temperature".to_string(), json!(params.temperature));
+            body_map.insert("max_tokens".to_string(), json!(params.max_tokens));
+            body_map.insert("top_p".to_string(), json!(params.top_p));
+            body_map.insert("enable_thinking".to_string(), json!(params.enable_thinking));
+        }
+        //处理额外，特殊参数
+        if let Some(params) = &self.postbody.extract_params {
+            for (key, value) in params {
+                body_map.insert(key.to_string(), json!(value));
+            }
+        }
+
         body_map
     }
     ///流式响应
@@ -187,6 +188,8 @@ impl LLMClient {
         let mut reasoning_buf = String::new();
         //工具积累
         let mut tool_acc: HashMap<usize, ToolCallAcc> = HashMap::new();
+        //tokens使用
+        let mut usage = Usage::default();
 
         //标记思考
         let mut in_reasoning = false;
@@ -209,10 +212,6 @@ impl LLMClient {
                 }
 
                 let json_str = line.strip_prefix("data:").unwrap_or(line);
-                // println!(
-                //     "\n=======json_str=======\n{}\n=========================\n",
-                //     json_str
-                // );
                 //流式结束
                 if json_str.contains("[DONE]") {
                     let _ = tx;
@@ -230,6 +229,8 @@ impl LLMClient {
                         })
                         .map_err(APIErr::SendError)?;
                     }
+                    tx.send(LLMResponse::TokensUsage { usage })
+                        .map_err(APIErr::SendError)?;
                     continue;
                 }
 
@@ -239,6 +240,8 @@ impl LLMClient {
                         chunk: json_str.to_string(),
                         e,
                     })?;
+                //存入tokens
+                usage = chunk.usage.unwrap_or_default();
 
                 let choice = match chunk.choices.first() {
                     Some(c) => c,
@@ -272,7 +275,7 @@ impl LLMClient {
 
                             content_buf.push_str(content);
 
-                            // reasoning_buf.push_str("\n</think>\n");
+                            reasoning_buf.push_str("\n</think>\n");
 
                             tx.send(LLMResponse::Reasoning {
                                 chunk: reasoning_buf.clone(),
@@ -296,8 +299,10 @@ impl LLMClient {
                             //工具name,发送preparing
                             if let Some(name) = &tc.function.name {
                                 acc.name = name.clone();
-                                tx.send(LLMResponse::ToolPreparing { name: name.to_string() })
-                                    .map_err(APIErr::SendError)?;
+                                tx.send(LLMResponse::ToolPreparing {
+                                    name: name.to_string(),
+                                })
+                                .map_err(APIErr::SendError)?;
                             }
                             //工具参数，等待积累，tool_call结束时发送call
                             if let Some(args) = &tc.function.arguments {
@@ -474,6 +479,7 @@ struct ToolCallAcc {
 #[derive(Debug, Deserialize, Serialize)]
 struct StreamChunk {
     choices: Vec<StreamChoice>,
+    usage: Option<Usage>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -491,3 +497,42 @@ struct Delta {
     tool_calls: Option<Vec<ToolCall>>,
 }
 
+///tokens使用量
+#[derive(Default, Clone, Copy, Debug, Deserialize, Serialize,PartialEq, Eq)]
+pub struct Usage {
+    ///提示词的tokens
+    prompt_tokens: Option<usize>,
+    ///输出的tokens
+    completion_tokens: Option<usize>,
+    ///总量
+    total_tokens: Option<usize>,
+    ///缓存命中
+    prompt_cache_hit_tokens: Option<usize>,
+}
+
+impl Display for Usage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let prompt_tokens = match self.prompt_tokens {
+            Some(u) => &format!("prompt tokens usage : {}", u),
+            None => "prompt tokens usage not get from stream chunk",
+        };
+        let completion_tokens = match self.completion_tokens {
+            Some(u) => &format!("completion tokens usage : {}", u),
+            None => "completion tokens usage not get from stream chunk",
+        };
+        let total_tokens = match self.total_tokens {
+            Some(u) => &format!("total tokens usage : {}", u),
+            None => "total tokens usage not get from stream chunk",
+        };
+        let prompt_cache_hit_tokens = match self.prompt_cache_hit_tokens {
+            Some(u) => &format!("prompt cache hit tokens usage : {}", u),
+            None => "prompt cache hit tokens usage not get from stream chunk",
+        };
+
+        write!(
+            f,
+            "\t{}\n\t{}\n\t{}\n\t{}",
+            prompt_tokens, completion_tokens, total_tokens, prompt_cache_hit_tokens
+        )
+    }
+}

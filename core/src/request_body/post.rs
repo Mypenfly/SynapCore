@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -17,7 +19,8 @@ pub struct PostBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<ToolDefinition>>,
     pub streaming: bool,
-    pub params: Params,
+    pub params: Option<Params>,
+    pub    extract_params:Option<HashMap<String,String>>
 }
 
 impl PostBody {
@@ -28,6 +31,15 @@ impl PostBody {
         tools: Option<Vec<ToolDefinition>>,
         params: Params,
     ) -> Self {
+
+        let params = if provider.use_params.unwrap_or(true) {
+            Some(params)
+        } else {
+            None
+        };
+
+        let extract_params = provider.extract_params.clone();
+        
         Self {
             base_url: provider.base_url.clone(),
             api_key: provider.api_key.clone(),
@@ -36,6 +48,7 @@ impl PostBody {
             tools,
             streaming: true,
             params,
+            extract_params
         }
     }
 }

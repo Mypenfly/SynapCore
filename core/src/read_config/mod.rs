@@ -12,6 +12,10 @@ pub struct Provider {
     pub base_url: String,
     pub api_key: String,
     pub models: Vec<Model>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub use_params:Option<bool>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub extract_params:Option<HashMap<String,String>>
 }
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
@@ -48,6 +52,8 @@ impl Default for JsonConfig {
             base_url: "https://api.openai.com/v1".to_string(),
             api_key: "YOUR API KEY".to_string(),
             models: vec![model],
+            use_params:Some(true),
+            extract_params:None
         };
 
         let streaming = true;
