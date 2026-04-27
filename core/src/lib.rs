@@ -318,6 +318,12 @@ impl Core {
                 .text
                 .push_str("\n（system hint :请不要尝试调用工具，用户没有开放工具权限）\n");
         }
+        //reflection注入
+        let reflection = self.read_reflection(character)?;
+        if !reflection.is_empty() {
+            bot.reflection_into(format!("Reflection Content/Action Guide:\n{}", reflection));
+        }
+
         //skills注入
         if is_leader {
             let skills = self.tool.get_skills_list();
@@ -678,6 +684,21 @@ impl Core {
         let _ = event_sender.send(CoreEvent::Finshed).await;
 
         Ok(())
+    }
+    ///注入reflection
+    fn read_reflection(&self, character: &str) -> Result<String, CoreErr> {
+        use std::fs;
+        let path = self
+            .config
+            .normal
+            .sc_root
+            .join("data")
+            .join(format!("{}_reflection.md", character));
+        if path.exists() {
+            fs::read_to_string(&path).map_err(|e| CoreErr::InitError(e.to_string()))
+        } else {
+            Ok(String::new())
+        }
     }
 
     ///退出操作

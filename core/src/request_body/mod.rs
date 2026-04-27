@@ -275,8 +275,6 @@ impl LLMClient {
 
                             content_buf.push_str(content);
 
-                            reasoning_buf.push_str("\n</think>\n");
-
                             tx.send(LLMResponse::Reasoning {
                                 chunk: reasoning_buf.clone(),
                             })
@@ -498,7 +496,7 @@ struct Delta {
 }
 
 ///tokens使用量
-#[derive(Default, Clone, Copy, Debug, Deserialize, Serialize,PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Usage {
     ///提示词的tokens
     prompt_tokens: Option<usize>,

@@ -190,10 +190,34 @@ impl Assistant {
         // println!("postdody:{:#?}",serde_json::to_string_pretty(&self.llm.postbody.session));
     }
     ///skills_list注入
-    pub(crate) fn skills_list_into(&mut self,skills:String) {
-        let messenge =Messenge::system(skills) ;
+    pub(crate) fn skills_list_into(&mut self, skills: String) {
+        let messenge = Messenge::system(skills);
         // println!("messenge:{:#?}",serde_json::to_string_pretty(&messenge));
         self.llm.postbody.session.add_into(messenge, 2);
+    }
+    ///reflection 注入（直接注入到第0条）
+    pub(crate) fn reflection_into(&mut self, reflection: String) {
+        if self.llm.postbody.session.messenge.is_empty() {
+            self.push_reflection(reflection);
+            return;
+        }
+        if self.llm.postbody.session.messenge[0].content.is_empty() {
+            self.push_reflection(reflection);
+            return;
+        }
+        let system_prompt = self.llm.postbody.session.messenge[0].content[0]
+            .text
+            .clone()
+            .unwrap_or_default();
+        let prompt = format!(
+            "{}\n\n{}\n(请严格按照以上要求行动/回复)",
+            system_prompt, reflection
+        );
+        self.push_reflection(prompt);
+    }
+    fn push_reflection(&mut self, reflection: String) {
+        let messenge = Messenge::system(reflection);
+        self.llm.postbody.session.add_into(messenge, 0);
     }
 }
 
