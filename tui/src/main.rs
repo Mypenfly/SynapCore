@@ -23,7 +23,7 @@ async fn main() -> MainResult<()> {
     terminal.clear().map_err(MainErr::TermianlError)?;
     execute!(io::stdout(), EnableMouseCapture).map_err(MainErr::TermianlError)?;
 
-    let mut app = App::new();
+    let mut app = App::new().await.map_err(MainErr::AppError)?;
     let result = app.run(&mut terminal).await.map_err(MainErr::AppError);
     execute!(io::stdout(), DisableMouseCapture).map_err(MainErr::TermianlError)?;
 

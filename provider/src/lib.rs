@@ -120,7 +120,7 @@ impl Provider {
 
         // 主循环
         let (_, mut bot_response) = mpsc::channel(1024);
-        println!("[Provider] main loop start");
+        // eprintln!("[Provider] main loop start");
         loop {
             tokio::select! {
                 // 处理命令
@@ -157,7 +157,7 @@ impl Provider {
                 // AutoLoop计时
                 _ = auto_loop_interval.tick() => {
                     auto_loop_elapsed_minutes += 1;
-                    println!("计时 + 1");
+                    // println!("计时 + 1");
 
                     // println!("auto loop : {:#?}",&self.auto_loop);
                     if let Some(al) = &mut self.auto_loop && al.tick(auto_loop_elapsed_minutes,self.core.config.normal.auto_loop_gap).await{

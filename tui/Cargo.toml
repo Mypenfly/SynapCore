@@ -4,6 +4,12 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-
 tokio = { version = "1.35", features = ["full"] }
 ratatui = { version = "0.30.0", features = ["serde"] }
+crossterm = "0.29"
+
+# 新增依赖
+synapcore_provider = { path = "../provider" }
+synapcore_core = { path = "../core" }
+tui-markdown = "0.3"  # Markdown渲染支持
+chrono = "0.4"  # 时间戳处理

@@ -1,50 +1,79 @@
-use crate::app::ui::task_page::render_task;
-
-use super::state::AppPage;
-use super::ui::render_input;
-use super::ui::start_page::render_start;
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout},
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Style},
+    text::Text,
+    widgets::Paragraph,
 };
 
-///输出内容的管理
+use crate::app::{
+    TaskPageStore,
+    ui::{start_page::render_start, task_page::render_task},
+};
+
+/// 绘制工作者
 #[derive(Debug, Default, Clone)]
-pub struct DrawWorker {
-    pub task: String,
-    pub messenge: String,
-}
+pub struct DrawWorker;
 
 impl DrawWorker {
     pub fn new() -> Self {
-        Self {
-            task: String::new(),
-            messenge: String::new(),
-        }
+        Self
     }
 
-    pub fn draw_ui(&mut self, frame: &mut Frame, text: String, page: &AppPage) {
+    /// 绘制启动页面
+    pub fn draw_start_page(&self, frame: &mut Frame, input_buffer: &str) {
         let area = frame.area();
+        let chunks = Layout::vertical([
+            Constraint::Percentage(50),
+            Constraint::Percentage(20),
+            Constraint::Percentage(30),
+        ])
+        .split(area);
 
-        match page {
-            AppPage::StartPage => {
-                let chunks = Layout::vertical([
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(20),
-                    Constraint::Percentage(30),
-                ])
-                .split(area);
-                render_start(frame, chunks[0]);
-                render_input(frame, chunks[1], text);
-            }
-            AppPage::TaskPage => {
-                let chunks =
-                    Layout::vertical([Constraint::Percentage(80), Constraint::Percentage(20)])
-                        .split(area);
-                render_task(frame, chunks[0], &self.messenge, &self.task);
-                render_input(frame, chunks[1], text);
-            }
-            _ => (),
+        render_start(frame, chunks[0]);
+        self.draw_input_bar(frame, chunks[1], input_buffer, false, "Start");
+    }
+
+    /// 绘制任务页面
+    pub fn draw_task_page(&self, frame: &mut Frame, task_store: &TaskPageStore, generating: bool) {
+        let area = frame.area();
+        render_task(frame, area, task_store, generating);
+    }
+
+    /// 绘制占位符页面
+    pub fn draw_placeholder(&self, frame: &mut Frame, message: &str) {
+        let area = frame.area();
+        let text = Text::styled(
+            format!("{} (功能待开发)", message),
+            Style::default().fg(Color::Yellow),
+        );
+        let paragraph = Paragraph::new(text).alignment(ratatui::layout::Alignment::Center);
+
+        frame.render_widget(paragraph, area);
+    }
+
+    /// 绘制输入栏（简单版本）
+    fn draw_input_bar(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        text: &str,
+        generating: bool,
+        page_label: &str,
+    ) {
+        let mut display_text = if text.is_empty() && !generating {
+            format!("{} > 输入以发起对话/任务", page_label)
+        } else {
+            format!("{} > {}", page_label, text)
+        };
+
+        // 添加生成动画
+        if generating {
+            display_text.push_str(" ...");
         }
+
+        let paragraph = Paragraph::new(display_text).style(Style::default().fg(Color::White));
+
+        frame.render_widget(paragraph, area);
     }
 }
