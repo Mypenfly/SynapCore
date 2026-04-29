@@ -35,16 +35,27 @@ impl Session {
             self.messenge.push(messenge);
         } else {
             self.messenge[position] = messenge;
-            if self.messenge[position + 1].role != Role::User {
-                self.messenge[position + 1] = Messenge::user("ignore this".to_string())
-            }
         }
     }
     ///压缩对话，从第一项开始是避免将系统提示词给覆盖了，应该能减少tokens
     pub fn compression(&mut self, from: usize, to: usize) -> Vec<Messenge> {
+        //先清洗掉tool_call
+        self.clear_tools();
+        if self.messenge.len() <= to - 10 {
+            return Vec::new();
+        }
+
         let last = self.check_last(to).unwrap_or(from);
 
-        self.messenge.drain(from..last).collect()
+        let mut list = Vec::new();
+        //如果last大于20,直接清除
+        let sub_list = if last >= 20 {
+            self.messenge.drain(from..self.messenge.len())
+        } else {
+            self.messenge.drain(from..last)
+        };
+        list.extend(sub_list);
+        list
     }
     ///保证压缩算法，确保压缩之后的system后第一个是user
     fn check_last(&self, to: usize) -> Option<usize> {
@@ -57,11 +68,15 @@ impl Session {
         for num in to..0 {
             let role = &self.messenge[num].role;
             if role == &Role::User {
-                return Some(num);
+                return Some(num - 1);
             };
         }
 
         None
+    }
+    ///清洗tool_call
+    fn clear_tools(&mut self) {
+        self.messenge.pop_if(|m| m.role == Role::Tool);
     }
 
     ///转化成api格式

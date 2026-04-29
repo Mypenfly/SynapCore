@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, MouseEventKind};
 use ratatui::DefaultTerminal;
 use std::{cell::RefCell, rc::Rc};
 use tokio::sync::mpsc;
@@ -301,20 +301,31 @@ impl App {
         Ok(())
     }
 
-    /// 键盘监听器任务
+    /// 键盘/鼠标监听器任务
     async fn keyboard_listener(event_tx: mpsc::Sender<AppEvent>) -> Result<(), AppErr> {
         loop {
-            // 使用spawn_blocking读取键盘事件
             let event = tokio::task::spawn_blocking(crossterm::event::read)
                 .await
                 .map_err(|e| AppErr::Io(std::io::Error::other(e.to_string())))?
                 .map_err(|e| AppErr::Io(std::io::Error::other(e.to_string())))?;
 
-            if let Event::Key(key_event) = event {
-                event_tx
-                    .send(AppEvent::Key(key_event))
-                    .await
-                    .map_err(|e| AppErr::Channel(format!("发送键盘事件失败: {}", e)))?;
+            match event {
+                Event::Key(key_event) => {
+                    event_tx
+                        .send(AppEvent::Key(key_event))
+                        .await
+                        .map_err(|e| AppErr::Channel(format!("发送键盘事件失败: {}", e)))?;
+                }
+                Event::Mouse(mouse_event) => match mouse_event.kind {
+                    MouseEventKind::ScrollUp => {
+                        let _ = event_tx.send(AppEvent::Scroll(1)).await;
+                    }
+                    MouseEventKind::ScrollDown => {
+                        let _ = event_tx.send(AppEvent::Scroll(-1)).await;
+                    }
+                    _ => {}
+                },
+                _ => {}
             }
         }
     }

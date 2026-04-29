@@ -222,13 +222,13 @@ impl TaskPageStore {
 
     /// 滚动向上
     pub fn scroll_up(&mut self, lines: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_add(lines);
+        self.scroll_offset = self.scroll_offset.saturating_sub(lines);
         self.auto_scrolling = false;
     }
 
     /// 滚动向下
     pub fn scroll_down(&mut self, lines: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(lines);
+        self.scroll_offset = self.scroll_offset.saturating_add(lines);
         // 如果滚动到底部且正在生成，重新启用自动滚动
         if self.scroll_offset == 0 && self.generating {
             self.auto_scrolling = true;
