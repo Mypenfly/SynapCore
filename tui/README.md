@@ -478,6 +478,6 @@ async fn test_provider_integration() {
 **文档版本**: 1.0  
 **最后更新**: 2026-04-29  
 **TUI版本**: synapcore_tui 0.1.0  
-**维护者**: SynapCore开发团队  
+**维护者**: Mypenfly  
 
 *TUI模块是SynapCore系统的用户界面层，致力于提供最佳的终端AI交互体验。*
